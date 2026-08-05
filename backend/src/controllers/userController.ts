@@ -19,6 +19,7 @@ export const getProfile: RequestHandler = asyncHandler(async (req, res) => {
       name: user.name,
       balance: user.balance.toString(),
       createdAt: user.createdAt,
+      hasPassword: user.passwordHash != null,
       passkeys: user.credentials,
     },
   });

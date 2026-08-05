@@ -23,13 +23,15 @@ import type { AuthenticatorTransportFuture, RegistrationResponseJSON } from "@si
 import { evaluateRisk, isUsualHour } from "../services/riskEngine.js";
 import { anomalyScore, mergeSample, profileHasData, emptyProfile, type KeystrokeProfile } from "../services/keystrokeService.js";
 import { sendOtp, verifyOtp, sendAlertEmail } from "../services/emailService.js";
-import { checkEmailBreach } from "../services/hibpService.js";
+import { checkEmailBreach, checkPasswordBreach } from "../services/hibpService.js";
 import { findTrustedDevice, markDeviceTrusted } from "../services/deviceService.js";
 import { geoFromIp, formatLocation } from "../utils/geo.js";
 import {
   generateRecoveryCodes,
+  hashPassword,
   signAccessToken,
   signRefreshToken,
+  verifyPassword,
   verifyRefreshToken,
   verifyPassword as verifyRecoveryCode,
 } from "../utils/crypto.js";
@@ -37,6 +39,9 @@ import { env, isProduction } from "../config/env.js";
 import {
   loginOptionsSchema,
   loginVerifySchema,
+  passwordLoginSchema,
+  passwordRemoveSchema,
+  passwordSetSchema,
   qrApproveSchema,
   qrCreateSchema,
   refreshSchema,
@@ -273,7 +278,7 @@ export const loginOptions: RequestHandler = asyncHandler(async (req, res) => {
     credentials,
   });
 
-  res.json({ options, email: user.email });
+  res.json({ options, email: user.email, hasPassword: user.passwordHash != null });
 });
 
 export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
@@ -358,6 +363,156 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PASSWORD FALLBACK
+// ---------------------------------------------------------------------------
+
+/**
+ * Password login — a secondary path for users who set a password. The same
+ * risk engine runs here as for passkeys, so a known device signs straight in
+ * and an unusual device is asked to step up.
+ */
+export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
+  const body = passwordLoginSchema.parse(req.body);
+  const email = body.email.trim().toLowerCase();
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.passwordHash) {
+    // Same generic message for "no account" and "no password set" to avoid
+    // account enumeration; the UI surfaces the fallback via /auth/login/options.
+    throw new AppError(401, "Invalid credentials.");
+  }
+
+  const ok = await verifyPassword(user.passwordHash, body.password);
+  if (!ok) throw new AppError(401, "Invalid credentials.");
+
+  const ip = req.ip ?? "unknown";
+  const ctx: LoginContext = {
+    email,
+    deviceFingerprint: body.deviceFingerprint,
+    deviceInfo: body.deviceInfo,
+    keystrokes: body.keystrokes,
+  };
+
+  const input = await assessLogin(user, ctx, ip);
+  const assessment = evaluateRisk(input);
+
+  await prisma.loginHistory.create({
+    data: {
+      userId: user.id,
+      eventType: "login",
+      deviceInfo: body.deviceInfo,
+      ipAddress: ip,
+      location: input.location,
+      riskScore: assessment.score,
+      riskAction: assessment.action,
+      details: JSON.stringify({ signals: assessment.signals, method: "password" }),
+    },
+  });
+
+  if (assessment.action === "block") {
+    await sendAlertEmail(email, "NovaBank blocked a sign-in attempt", `We blocked a sign-in from ${body.deviceInfo} (${ip}). If this was you, contact support.`);
+    throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
+  }
+
+  if (assessment.action === "step_up_email") {
+    const otp = await sendOtp(email, "login_step_up");
+    return res.json({
+      stepUpRequired: true,
+      method: "otp_email",
+      risk: assessment,
+      ...(isProduction ? {} : { devOtp: otp }),
+    });
+  }
+
+  if (assessment.action === "step_up_passkey") {
+    const userWithCreds = await prisma.user.findUnique({ where: { email }, include: { credentials: true } });
+    const userCreds = buildUserCredentialsFromDb(userWithCreds?.credentials ?? []);
+    const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
+    return res.json({
+      stepUpRequired: true,
+      method: "passkey",
+      risk: assessment,
+      options,
+    });
+  }
+
+  const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, assessment.score, "allow", ip);
+  res.json({ stepUpRequired: false, risk: assessment, accessToken, refreshToken, user: outUser });
+});
+
+/** Set or change the password fallback for a signed-in user. */
+export const setPassword: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const { password, currentPassword } = passwordSetSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) throw new AppError(404, "User not found.");
+
+  if (user.passwordHash) {
+    if (!currentPassword) throw new AppError(400, "Enter your current password to change it.");
+    const ok = await verifyPassword(user.passwordHash, currentPassword);
+    if (!ok) throw new AppError(401, "Current password is incorrect.");
+  }
+
+  if (env.HIBP_API_KEY) {
+    const count = await checkPasswordBreach(password);
+    if (count !== null && count > 0) {
+      throw new AppError(
+        400,
+        "This password appears in known data breaches. Pick a different one.",
+      );
+    }
+  }
+
+  const passwordHash = await hashPassword(password);
+  await prisma.user.update({ where: { id: req.userId }, data: { passwordHash } });
+
+  await prisma.loginHistory.create({
+    data: {
+      userId: user.id,
+      eventType: "alert",
+      deviceInfo: "NovaBank Web",
+      ipAddress: req.ip ?? "unknown",
+      location: null,
+      riskScore: 0,
+      riskAction: "allow",
+      details: JSON.stringify({ kind: "password_set" }),
+    },
+  });
+
+  res.json({ ok: true, hasPassword: true });
+});
+
+/** Remove the password fallback (must confirm the current password first). */
+export const removePassword: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const { password } = passwordRemoveSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user || !user.passwordHash) throw new AppError(404, "This account has no password set.");
+
+  const ok = await verifyPassword(user.passwordHash, password);
+  if (!ok) throw new AppError(401, "Password is incorrect.");
+
+  await prisma.user.update({ where: { id: req.userId }, data: { passwordHash: null } });
+
+  await prisma.loginHistory.create({
+    data: {
+      userId: user.id,
+      eventType: "alert",
+      deviceInfo: "NovaBank Web",
+      ipAddress: req.ip ?? "unknown",
+      location: null,
+      riskScore: 0,
+      riskAction: "allow",
+      details: JSON.stringify({ kind: "password_removed" }),
+    },
+  });
+
+  res.json({ ok: true, hasPassword: false });
+});
+
+// ---------------------------------------------------------------------------
 // STEP-UP
 // ---------------------------------------------------------------------------
 
@@ -399,6 +554,10 @@ export const stepUpVerify: RequestHandler = asyncHandler(async (req, res) => {
         transports: credentialRecord.transports as AuthenticatorTransportFuture[],
       });
       ok = true;
+    }
+  } else if (body.method === "password") {
+    if (user.passwordHash) {
+      ok = await verifyPassword(user.passwordHash, body.password ?? "");
     }
   }
 
@@ -501,5 +660,13 @@ export const me: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "Not authenticated.");
   const user = await prisma.user.findUnique({ where: { id: req.userId } });
   if (!user) throw new AppError(404, "User not found.");
-  res.json({ user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt } });
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      hasPassword: user.passwordHash != null,
+    },
+  });
 });

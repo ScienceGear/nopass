@@ -11,12 +11,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  balance   Decimal  @default(100000) @db.Decimal(12, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  balance      Decimal  @default(100000) @db.Decimal(12, 2)
+  passwordHash String? // argon2id, set only if the user opts into the password fallback
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   credentials      Credential[]
   trustedDevices   TrustedDevice[]

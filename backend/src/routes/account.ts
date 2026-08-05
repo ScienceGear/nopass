@@ -10,6 +10,6 @@ router.use(requireAuth);
 router.get("/summary", account.summary);
 router.get("/transactions", account.transactions);
 router.post("/transfer", transferLimiter, account.transferCreate);
-router.post("/transfer/confirm", account.transferConfirm);
+router.post("/transfer/confirm", transferLimiter, account.transferConfirm);
 
 export default router;

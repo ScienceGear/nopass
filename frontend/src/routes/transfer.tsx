@@ -3,11 +3,13 @@ import * as React from "react";
 import { ArrowRight, Check, MailCheck, ShieldCheck } from "lucide-react";
 import { Button, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
 import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
+import { RequireAuth } from "@/components/nova/RequireAuth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatINR, postTransfer, postTransferConfirm, STEP_UP_THRESHOLD_MINOR } from "@/lib/api";
 import { useKeystrokeCapture } from "@/lib/keystroke";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/transfer")({
@@ -38,13 +40,17 @@ function Transfer() {
     transferToken: string;
     reference: string;
     devOtp?: string;
+    hasPassword?: boolean;
   } | null>(null);
+  const [method, setMethod] = React.useState<"otp_email" | "password">("otp_email");
   const [otp, setOtp] = React.useState("");
+  const [stepUpPassword, setStepUpPassword] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
   const [receipt, setReceipt] = React.useState<{ reference: string; amountMinor: number } | null>(
     null,
   );
   const otpKeys = useKeystrokeCapture();
+  const passwordKeys = useKeystrokeCapture();
 
   const amountMinor = Math.round((Number(amount) || 0) * 100);
   const needsStepUp = amountMinor >= STEP_UP_THRESHOLD_MINOR;
@@ -63,8 +69,11 @@ function Transfer() {
           transferToken: res.intentId,
           reference: res.reference,
           ...(res.devOtp ? { devOtp: res.devOtp } : {}),
+          ...(res.hasPassword ? { hasPassword: res.hasPassword } : {}),
         });
+        setMethod("otp_email");
         setOtp(res.devOtp ?? "");
+        setStepUpPassword("");
         toast.info("One more step", {
           description: "We emailed a code to confirm this transfer.",
         });
@@ -84,13 +93,35 @@ function Transfer() {
   async function confirmStepUp(e: React.FormEvent) {
     e.preventDefault();
     if (!stepUp) return;
+    if (method === "password") {
+      if (!stepUpPassword) {
+        toast.error("Enter your password.");
+        return;
+      }
+      setConfirming(true);
+      try {
+        await postTransferConfirm({
+          transferToken: stepUp.transferToken,
+          method: "password",
+          password: stepUpPassword,
+        });
+        setReceipt({ reference: stepUp.reference, amountMinor });
+        setStepUp(null);
+        toast.success("Transfer verified and sent");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "That password didn't match.");
+      } finally {
+        setConfirming(false);
+      }
+      return;
+    }
     if (!/^\d{6}$/.test(otp)) {
       toast.error("Enter the 6-digit code.");
       return;
     }
     setConfirming(true);
     try {
-      await postTransferConfirm({ transferToken: stepUp.transferToken, otp });
+      await postTransferConfirm({ transferToken: stepUp.transferToken, method: "otp_email", otp });
       setReceipt({ reference: stepUp.reference, amountMinor });
       setStepUp(null);
       toast.success("Transfer verified and sent");
@@ -102,150 +133,184 @@ function Transfer() {
   }
 
   return (
-    <NovaBackground>
-      <PageShell>
-        <Navbar variant="app" />
+    <RequireAuth>
+      <NovaBackground>
+        <PageShell>
+          <Navbar variant="app" />
 
-        <div className="mx-auto max-w-[34rem] py-10 sm:py-16">
-          {receipt ? (
-            <Reveal>
-              <Panel className="text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-[oklch(0.52_0.14_152)]">
-                  <Check className="size-7" strokeWidth={2.4} />
-                </span>
-                <h1 className="mt-5 text-2xl">Money sent</h1>
-                <p className="tnum mt-2 text-3xl font-bold">{formatINR(receipt.amountMinor)}</p>
-                <div className="mt-6 hairline-y rounded-2xl bg-muted px-4 text-left">
-                  <MetaLine label="To" value={recipient} />
-                  <MetaLine
-                    label="Reference"
-                    value={<span className="font-mono text-xs">{receipt.reference}</span>}
-                  />
-                  <MetaLine label="Note" value={note || "—"} />
-                  <MetaLine label="Approved by" value="Passkey · this device" />
-                </div>
-                <Button
-                  size="lg"
-                  className="mt-6 w-full"
-                  onClick={() => navigate({ to: "/dashboard" })}
-                >
-                  Done
-                </Button>
-              </Panel>
-            </Reveal>
-          ) : stepUp ? (
-            <Reveal>
-              <Panel>
-                <PillBadge icon={<MailCheck />}>Confirm this transfer</PillBadge>
-                <h1 className="mt-4 text-2xl">One last check</h1>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {formatINR(amountMinor)} to{" "}
-                  <span className="font-medium text-ink">{recipient}</span> is above your instant
-                  limit. We emailed a 6-digit code to your inbox.
-                </p>
-
-                <div className="mt-5 hairline-y rounded-2xl bg-muted px-4 text-left">
-                  <MetaLine label="Amount" value={formatINR(amountMinor)} />
-                  <MetaLine label="To" value={recipient} />
-                  <MetaLine
-                    label="Reference"
-                    value={<span className="font-mono text-xs">{stepUp.reference}</span>}
-                  />
-                </div>
-
-                <form onSubmit={confirmStepUp} className="mt-6 space-y-4">
-                  <Input
-                    autoFocus
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                    onKeyDown={otpKeys.onKeyDown}
-                    placeholder="••••••"
-                    className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
-                  />
-                  <Button type="submit" size="lg" className="w-full" disabled={confirming}>
-                    {confirming ? "Verifying…" : "Confirm and send"}{" "}
-                    <ArrowRight className="size-4" />
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStepUp(null);
-                      setOtp("");
-                    }}
-                    className="w-full text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+          <div className="mx-auto max-w-[34rem] py-10 sm:py-16">
+            {receipt ? (
+              <Reveal>
+                <Panel className="text-center">
+                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-[oklch(0.52_0.14_152)]">
+                    <Check className="size-7" strokeWidth={2.4} />
+                  </span>
+                  <h1 className="mt-5 text-2xl">Money sent</h1>
+                  <p className="tnum mt-2 text-3xl font-bold">{formatINR(receipt.amountMinor)}</p>
+                  <div className="mt-6 hairline-y rounded-2xl bg-muted px-4 text-left">
+                    <MetaLine label="To" value={recipient} />
+                    <MetaLine
+                      label="Reference"
+                      value={<span className="font-mono text-xs">{receipt.reference}</span>}
+                    />
+                    <MetaLine label="Note" value={note || "—"} />
+                    <MetaLine label="Approved by" value="Passkey · this device" />
+                  </div>
+                  <Button
+                    size="lg"
+                    className="mt-6 w-full"
+                    onClick={() => navigate({ to: "/dashboard" })}
                   >
-                    ← Change amount
-                  </button>
-                </form>
-              </Panel>
-            </Reveal>
-          ) : (
-            <Reveal>
-              <Panel>
-                <PillBadge icon={<ShieldCheck />}>Step-up above ₹50,000</PillBadge>
-                <h1 className="mt-4 text-2xl">Send money</h1>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Small transfers go straight through. Large ones ask your phone to confirm once
-                  more.
-                </p>
-
-                <form onSubmit={submit} className="mt-7 space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="recipient">Recipient</Label>
-                    <Input
-                      id="recipient"
-                      value={recipient}
-                      onChange={(e) => setRecipient(e.target.value)}
-                      placeholder="Name, UPI ID or account"
-                      className="h-12 rounded-2xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Amount (₹)</Label>
-                    <Input
-                      id="amount"
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="tnum h-14 rounded-2xl text-2xl font-bold"
-                    />
-                    <p className="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-muted-foreground">
-                      {needsStepUp ? "One-time code required" : "Instant · no extra step"}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="note">Note (optional)</Label>
-                    <Textarea
-                      id="note"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="Rent, split dinner, invoice #…"
-                      className="min-h-24 rounded-2xl"
-                    />
-                  </div>
-                  <Button type="submit" size="lg" className="w-full" disabled={busy}>
-                    {busy ? "Checking…" : "Review and send"} <ArrowRight className="size-4" />
+                    Done
                   </Button>
-                </form>
-              </Panel>
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Need your history?{" "}
-                <Link
-                  to="/activity"
-                  className="font-semibold text-ink underline-offset-4 hover:underline"
-                >
-                  View activity
-                </Link>
-              </p>
-            </Reveal>
-          )}
-        </div>
+                </Panel>
+              </Reveal>
+            ) : stepUp ? (
+              <Reveal>
+                <Panel>
+                  <PillBadge icon={<MailCheck />}>Confirm this transfer</PillBadge>
+                  <h1 className="mt-4 text-2xl">One last check</h1>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {formatINR(amountMinor)} to{" "}
+                    <span className="font-medium text-ink">{recipient}</span> is above your instant
+                    limit. We emailed a 6-digit code to your inbox.
+                  </p>
 
-        <Footer />
-      </PageShell>
-    </NovaBackground>
+                  <div className="mt-5 hairline-y rounded-2xl bg-muted px-4 text-left">
+                    <MetaLine label="Amount" value={formatINR(amountMinor)} />
+                    <MetaLine label="To" value={recipient} />
+                    <MetaLine
+                      label="Reference"
+                      value={<span className="font-mono text-xs">{stepUp.reference}</span>}
+                    />
+                  </div>
+
+                  {stepUp.hasPassword ? (
+                    <div className="mt-6 grid grid-cols-2 gap-1 rounded-2xl bg-muted p-1">
+                      {(["otp_email", "password"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setMethod(m)}
+                          className={cn(
+                            "rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                            method === m ? "bg-card text-ink shadow-sm" : "text-muted-foreground",
+                          )}
+                        >
+                          {m === "otp_email" ? "Email code" : "Password"}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <form onSubmit={confirmStepUp} className="mt-6 space-y-4">
+                    {method === "password" ? (
+                      <Input
+                        autoFocus
+                        type="password"
+                        value={stepUpPassword}
+                        onChange={(e) => setStepUpPassword(e.target.value)}
+                        onKeyDown={passwordKeys.onKeyDown}
+                        autoComplete="current-password"
+                        placeholder="••••••••••"
+                        className="h-14 rounded-2xl text-center font-mono text-lg"
+                      />
+                    ) : (
+                      <Input
+                        autoFocus
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                        onKeyDown={otpKeys.onKeyDown}
+                        placeholder="••••••"
+                        className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      />
+                    )}
+                    <Button type="submit" size="lg" className="w-full" disabled={confirming}>
+                      {confirming ? "Verifying…" : "Confirm and send"}{" "}
+                      <ArrowRight className="size-4" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStepUp(null);
+                        setOtp("");
+                        setStepUpPassword("");
+                      }}
+                      className="w-full text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                    >
+                      ← Change amount
+                    </button>
+                  </form>
+                </Panel>
+              </Reveal>
+            ) : (
+              <Reveal>
+                <Panel>
+                  <PillBadge icon={<ShieldCheck />}>Step-up above ₹50,000</PillBadge>
+                  <h1 className="mt-4 text-2xl">Send money</h1>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Small transfers go straight through. Large ones ask your phone to confirm once
+                    more.
+                  </p>
+
+                  <form onSubmit={submit} className="mt-7 space-y-5">
+                    <div className="space-y-2">
+                      <Label htmlFor="recipient">Recipient</Label>
+                      <Input
+                        id="recipient"
+                        value={recipient}
+                        onChange={(e) => setRecipient(e.target.value)}
+                        placeholder="Name, UPI ID or account"
+                        className="h-12 rounded-2xl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Amount (₹)</Label>
+                      <Input
+                        id="amount"
+                        inputMode="decimal"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="tnum h-14 rounded-2xl text-2xl font-bold"
+                      />
+                      <p className="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-muted-foreground">
+                        {needsStepUp ? "One-time code required" : "Instant · no extra step"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="note">Note (optional)</Label>
+                      <Textarea
+                        id="note"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="Rent, split dinner, invoice #…"
+                        className="min-h-24 rounded-2xl"
+                      />
+                    </div>
+                    <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                      {busy ? "Checking…" : "Review and send"} <ArrowRight className="size-4" />
+                    </Button>
+                  </form>
+                </Panel>
+                <p className="mt-4 text-center text-sm text-muted-foreground">
+                  Need your history?{" "}
+                  <Link
+                    to="/activity"
+                    className="font-semibold text-ink underline-offset-4 hover:underline"
+                  >
+                    View activity
+                  </Link>
+                </p>
+              </Reveal>
+            )}
+          </div>
+
+          <Footer />
+        </PageShell>
+      </NovaBackground>
+    </RequireAuth>
   );
 }

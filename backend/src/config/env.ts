@@ -12,10 +12,13 @@ const envSchema = z.object({
   WEBAUTHN_RP_NAME: z.string().default("NovaBank"),
   WEBAUTHN_RP_ID: z.string().default("localhost"),
   WEBAUTHN_ORIGIN: z.string().default("http://localhost:5173"),
+  CORS_ORIGINS: z.string().default(""),
   EMAIL_HOST: z.string().default("smtp.ethereal.email"),
   EMAIL_PORT: z.coerce.number().default(587),
   EMAIL_USER: z.string().default(""),
   EMAIL_PASS: z.string().default(""),
+  EMAIL_FROM_NAME: z.string().default("NovaBank Security"),
+  EMAIL_FROM_ADDRESS: z.string().default("security@novabank.local"),
   HIBP_API_KEY: z.string().default(""),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });

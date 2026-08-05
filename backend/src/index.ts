@@ -15,6 +15,21 @@ import userRoutes from "./routes/user.js";
 const app = express();
 app.disable("x-powered-by");
 
+/**
+ * CORS allowlist. Requests with no Origin header (curl, same-origin, server
+ * tools) always pass. Browser requests must come from an allowed origin:
+ * - the configured WEBAUTHN_ORIGIN
+ * - anything in CORS_ORIGINS (comma-separated extra origins, e.g. a custom domain)
+ * - in development only, any localhost port
+ * In production, unknown origins are rejected.
+ */
+const corsAllowlist = new Set<string>([
+  env.WEBAUTHN_ORIGIN,
+  ...env.CORS_ORIGINS.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+]);
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -23,8 +38,10 @@ app.use(
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin || isProduction || /^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
-      return cb(null, true);
+      if (!origin) return cb(null, true);
+      if (corsAllowlist.has(origin)) return cb(null, true);
+      if (!isProduction && /^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
+      return cb(null, false);
     },
     credentials: true,
   }),

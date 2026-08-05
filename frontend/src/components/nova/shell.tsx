@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { support } from "@/lib/config";
 import { Button } from "./primitives";
 import { useSession, clearSession } from "@/lib/session";
 
@@ -266,9 +267,9 @@ const footerCols = [
     title: "Product",
     links: [
       { to: "/accounts", label: "Accounts" },
-      { to: "/pricing", label: "Pricing" },
-      { to: "/dashboard", label: "Dashboard" },
       { to: "/transfer", label: "Transfers" },
+      { to: "/activity", label: "Activity" },
+      { to: "/pricing", label: "Pricing" },
     ],
   },
   {
@@ -283,16 +284,15 @@ const footerCols = [
     title: "Company",
     links: [
       { to: "/about", label: "About" },
-      { to: "/about", label: "Careers" },
-      { to: "/about", label: "Press" },
+      { to: "/contact", label: "Contact" },
     ],
   },
   {
     title: "Legal",
     links: [
-      { to: "/security", label: "Terms" },
-      { to: "/security", label: "Privacy" },
-      { to: "/security", label: "Disclosures" },
+      { to: "/privacy", label: "Privacy" },
+      { to: "/terms", label: "Terms" },
+      { to: "/security", label: "Security" },
     ],
   },
 ] as const;
@@ -321,17 +321,31 @@ export function Footer() {
       </div>
       <div className="mt-12 flex flex-col gap-4 border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-6 sm:flex-row sm:items-center sm:justify-between">
         <Logo />
-        <p className="font-mono text-[0.6875rem] tracking-[0.08em] text-muted-foreground">
-          © {new Date().getFullYear()} NovaBank · Demo product, not a licensed bank
-        </p>
-        <div className="flex items-center gap-2">
-          {["X", "IN", "GH"].map((s) => (
-            <span
-              key={s}
+        <div className="flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:gap-4">
+          <Link
+            to="/contact"
+            className="font-mono text-[0.6875rem] tracking-[0.08em] text-muted-foreground transition-colors hover:text-ink"
+          >
+            {support.phone} · {support.email}
+          </Link>
+          <p className="font-mono text-[0.6875rem] tracking-[0.08em] text-muted-foreground">
+            © {new Date().getFullYear()} NovaBank · Demo product, not a licensed bank
+          </p>
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          {[
+            { to: "/about", label: "X" },
+            { to: "/about", label: "IN" },
+            { to: "/about", label: "GH" },
+          ].map((s) => (
+            <Link
+              key={s.label}
+              to={s.to}
+              aria-label={`NovaBank on ${s.label}`}
               className="grid size-8 place-items-center rounded-full bg-muted font-mono text-[0.625rem] tracking-wider text-muted-foreground transition-colors duration-200 hover:bg-lime-soft hover:text-ink"
             >
-              {s}
-            </span>
+              {s.label}
+            </Link>
           ))}
         </div>
       </div>

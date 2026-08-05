@@ -123,6 +123,7 @@ export async function verifyRegistrationResponseCredential(email: string, respon
     expectedChallenge: echoedChallenge,
     expectedOrigin: origins,
     expectedRPID: rpID,
+    requireUserVerification: false,
   });
   if (!verified || !registrationInfo) throw new AppError(400, "WebAuthn registration failed verification.");
 

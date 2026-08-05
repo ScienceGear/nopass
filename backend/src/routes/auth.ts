@@ -13,6 +13,11 @@ router.post("/register/verify", authLimiter, auth.registerVerify);
 router.post("/login/options", authLimiter, auth.loginOptions);
 router.post("/login/verify", authLimiter, auth.loginVerify);
 
+// Password fallback
+router.post("/password/login", authLimiter, auth.passwordLogin);
+router.post("/password/set", authLimiter, requireAuth, auth.setPassword);
+router.post("/password/remove", authLimiter, requireAuth, auth.removePassword);
+
 // QR cross-device login
 router.post("/login/qr/create", authLimiter, auth.qrCreate);
 router.get("/login/qr/status/:token", auth.qrStatus);

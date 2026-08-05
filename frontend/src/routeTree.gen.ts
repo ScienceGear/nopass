@@ -13,10 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TransferRouteImport } from './routes/transfer'
 import { Route as LoginIndexRouteImport } from './routes/login.index'
 import { Route as LoginApproveRouteImport } from './routes/login.approve'
@@ -42,6 +45,11 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -52,6 +60,11 @@ const PricingRoute = PricingRouteImport.update({
   path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -60,6 +73,11 @@ const SecurityRoute = SecurityRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TransferRoute = TransferRouteImport.update({
@@ -88,10 +106,13 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/transfer': typeof TransferRoute
   '/login/approve': typeof LoginApproveRoute
   '/settings/security': typeof SettingsSecurityRoute
@@ -102,10 +123,13 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/transfer': typeof TransferRoute
   '/login/approve': typeof LoginApproveRoute
   '/settings/security': typeof SettingsSecurityRoute
@@ -117,10 +141,13 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/transfer': typeof TransferRoute
   '/login/approve': typeof LoginApproveRoute
   '/settings/security': typeof SettingsSecurityRoute
@@ -133,10 +160,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/accounts'
     | '/activity'
+    | '/contact'
     | '/dashboard'
     | '/pricing'
+    | '/privacy'
     | '/security'
     | '/signup'
+    | '/terms'
     | '/transfer'
     | '/login/approve'
     | '/settings/security'
@@ -147,10 +177,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/accounts'
     | '/activity'
+    | '/contact'
     | '/dashboard'
     | '/pricing'
+    | '/privacy'
     | '/security'
     | '/signup'
+    | '/terms'
     | '/transfer'
     | '/login/approve'
     | '/settings/security'
@@ -161,10 +194,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/accounts'
     | '/activity'
+    | '/contact'
     | '/dashboard'
     | '/pricing'
+    | '/privacy'
     | '/security'
     | '/signup'
+    | '/terms'
     | '/transfer'
     | '/login/approve'
     | '/settings/security'
@@ -176,10 +212,13 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AccountsRoute: typeof AccountsRoute
   ActivityRoute: typeof ActivityRoute
+  ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   PricingRoute: typeof PricingRoute
+  PrivacyRoute: typeof PrivacyRoute
   SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
+  TermsRoute: typeof TermsRoute
   TransferRoute: typeof TransferRoute
   LoginApproveRoute: typeof LoginApproveRoute
   SettingsSecurityRoute: typeof SettingsSecurityRoute
@@ -216,6 +255,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -230,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/security': {
       id: '/security'
       path: '/security'
@@ -242,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/transfer': {
@@ -280,10 +340,13 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AccountsRoute: AccountsRoute,
   ActivityRoute: ActivityRoute,
+  ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   PricingRoute: PricingRoute,
+  PrivacyRoute: PrivacyRoute,
   SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
+  TermsRoute: TermsRoute,
   TransferRoute: TransferRoute,
   LoginApproveRoute: LoginApproveRoute,
   SettingsSecurityRoute: SettingsSecurityRoute,

@@ -7,13 +7,23 @@ import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt
 import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { postLoginOptions, postLoginVerify, postStepUpVerify, type LoginResult } from "@/lib/api";
+import {
+  postLoginOptions,
+  postLoginVerify,
+  postPasswordLogin,
+  postStepUpVerify,
+  type LoginResult,
+} from "@/lib/api";
 import { getDeviceFingerprint, getDeviceInfo } from "@/lib/fingerprint";
 import { useKeystrokeCapture } from "@/lib/keystroke";
 import { useSession } from "@/lib/session";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login/")({
+  validateSearch: (search: Record<string, unknown>) => {
+    const redirect = typeof search["redirect"] === "string" ? search["redirect"] : undefined;
+    return redirect ? { redirect } : {};
+  },
   head: () => ({
     meta: [
       { title: "Sign in to NovaBank with a passkey" },
@@ -28,25 +38,74 @@ export const Route = createFileRoute("/login/")({
   }),
   component: LoginPage,
 });
-
-type Stage = "email" | "passkey" | "otp";
+type Stage = "email" | "passkey" | "otp" | "password";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { redirect } = Route.useSearch();
   const { session } = useSession();
   const [stage, setStage] = React.useState<Stage>("email");
   const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [result, setResult] = React.useState<LoginResult | null>(null);
   const [otp, setOtp] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const emailKeys = useKeystrokeCapture();
+  const passwordKeys = useKeystrokeCapture();
   const otpKeys = useKeystrokeCapture();
 
+  const goAfterLogin = React.useCallback(() => {
+    const dest =
+      redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/dashboard";
+    setTimeout(() => navigate({ to: dest as "/dashboard" }), 900);
+  }, [redirect, navigate]);
+
   React.useEffect(() => {
-    if (session) navigate({ to: "/dashboard" });
-  }, [session, navigate]);
+    if (session) goAfterLogin();
+  }, [session, goAfterLogin]);
+
+  async function handleLoginResult(res: LoginResult) {
+    setResult(res);
+
+    if (res.stepUpRequired && res.method === "passkey") {
+      // Re-confirm with a fresh passkey gesture.
+      const [deviceFingerprint, deviceInfo] = await Promise.all([
+        getDeviceFingerprint(),
+        Promise.resolve(getDeviceInfo()),
+      ]);
+      const reCredential = await startAuthentication({ optionsJSON: res.options! });
+      await postStepUpVerify({
+        method: "passkey",
+        email,
+        credential: reCredential,
+        keystrokes: [],
+        deviceFingerprint,
+        deviceInfo,
+      });
+      setPhase("success");
+      toast.success("Signed in", { description: "Identity confirmed by your device." });
+      goAfterLogin();
+      return;
+    }
+
+    if (res.stepUpRequired && res.method === "otp_email") {
+      setStage("otp");
+      setOtp(res.devOtp ?? "");
+      setPhase("idle");
+      return;
+    }
+
+    if (res.riskAction === "allow") {
+      setPhase("success");
+      toast.success("Signed in", { description: res.reason });
+      goAfterLogin();
+      return;
+    }
+
+    setPhase("idle");
+  }
 
   async function startLogin(e?: React.FormEvent) {
     e?.preventDefault();
@@ -80,40 +139,7 @@ function LoginPage() {
         deviceFingerprint,
         deviceInfo,
       });
-      setResult(res);
-
-      if (res.stepUpRequired && res.method === "passkey") {
-        // Re-confirm with a fresh passkey gesture.
-        const reCredential = await startAuthentication({ optionsJSON: res.options! });
-        await postStepUpVerify({
-          method: "passkey",
-          email,
-          credential: reCredential,
-          keystrokes: [],
-          deviceFingerprint,
-          deviceInfo,
-        });
-        setPhase("success");
-        toast.success("Signed in", { description: "Identity confirmed by your device." });
-        setTimeout(() => navigate({ to: "/dashboard" }), 900);
-        return;
-      }
-
-      if (res.stepUpRequired && res.method === "otp_email") {
-        setStage("otp");
-        setOtp(res.devOtp ?? "");
-        setPhase("idle");
-        return;
-      }
-
-      if (res.riskAction === "allow") {
-        setPhase("success");
-        toast.success("Signed in", { description: res.reason });
-        setTimeout(() => navigate({ to: "/dashboard" }), 900);
-        return;
-      }
-
-      setPhase("idle");
+      await handleLoginResult(res);
     } catch (err) {
       setPhase("error");
       setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
@@ -122,6 +148,38 @@ function LoginPage() {
     }
   }
 
+  async function startPasswordLogin(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!email.includes("@")) {
+      setError("Enter the email you signed up with.");
+      return;
+    }
+    if (!password) {
+      setError("Enter your password.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const keystrokes = passwordKeys.getSamples();
+      const [deviceFingerprint, deviceInfo] = await Promise.all([
+        getDeviceFingerprint(),
+        Promise.resolve(getDeviceInfo()),
+      ]);
+      const res = await postPasswordLogin({
+        email,
+        password,
+        keystrokes,
+        deviceFingerprint,
+        deviceInfo,
+      });
+      await handleLoginResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function confirmOtp(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\d{6}$/.test(otp)) {
@@ -235,6 +293,79 @@ function LoginPage() {
                   <Button type="submit" size="lg" className="w-full" disabled={busy}>
                     Continue <ArrowRight className="size-4" />
                   </Button>
+                  <div className="flex items-center gap-3">
+                    <span className="h-px flex-1 bg-[oklch(0.207_0.014_251_/_0.07)]" />
+                    <span className="text-[0.6875rem] font-mono uppercase tracking-[0.14em] text-muted-foreground">
+                      or
+                    </span>
+                    <span className="h-px flex-1 bg-[oklch(0.207_0.014_251_/_0.07)]" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStage("password");
+                      setError(null);
+                    }}
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                  >
+                    Sign in with a password instead
+                  </button>
+                </form>
+              ) : stage === "password" ? (
+                <form onSubmit={startPasswordLogin} className="space-y-6 text-left">
+                  <div className="space-y-2 text-center">
+                    <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-lime-soft text-ink">
+                      <ShieldCheck className="size-7" />
+                    </span>
+                    <h1 className="pt-3 text-2xl">Sign in with your password</h1>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      Only used when a passkey isn&apos;t available. Stored as a hash, never
+                      plaintext.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoFocus
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      className="h-12 rounded-2xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={passwordKeys.onKeyDown}
+                      autoComplete="current-password"
+                      placeholder="••••••••••"
+                      className="h-12 rounded-2xl"
+                    />
+                  </div>
+                  {error ? (
+                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      {error}
+                    </p>
+                  ) : null}
+                  <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                    {busy ? "Checking…" : "Sign in with password"} <ArrowRight className="size-4" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStage("email");
+                      setError(null);
+                    }}
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                  >
+                    ← Use a passkey instead
+                  </button>
                 </form>
               ) : stage === "passkey" ? (
                 <div className="space-y-6">

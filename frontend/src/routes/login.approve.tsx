@@ -4,6 +4,7 @@ import { Check, MonitorSmartphone, Smartphone } from "lucide-react";
 import { Button, MetaLine, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
+import { RequireAuth } from "@/components/nova/RequireAuth";
 import { Shimmer } from "@/components/nova/skeletons";
 import { getQrStatus, postQrApprove, postQrCreate, postQrExchange } from "@/lib/api";
 import { getDeviceFingerprint, getDeviceInfo } from "@/lib/fingerprint";
@@ -38,7 +39,13 @@ function ApprovePage() {
           <Logo />
         </header>
         <div className="flex min-h-[70vh] items-center justify-center py-8">
-          {t ? <MobileApprove token={t} /> : <DesktopQr />}
+          {t ? (
+            <RequireAuth>
+              <MobileApprove token={t} />
+            </RequireAuth>
+          ) : (
+            <DesktopQr />
+          )}
         </div>
       </PageShell>
     </NovaBackground>

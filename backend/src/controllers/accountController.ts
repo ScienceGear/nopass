@@ -4,7 +4,8 @@ import { prisma } from "../config/db.js";
 import { getRedis } from "../config/redis.js";
 import { AppError, asyncHandler } from "../middleware/errorHandler.js";
 import { sendOtp, verifyOtp } from "../services/emailService.js";
-import { transferSchema, activityQuerySchema } from "../utils/validators.js";
+import { verifyPassword } from "../utils/crypto.js";
+import { transferSchema, activityQuerySchema, passwordSchema } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
 
 const TRANSFER_TOKEN_TTL = 15 * 60; // seconds
@@ -114,13 +115,24 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
     transferToken,
     amount: amount.toString(),
     recipient,
+    hasPassword: user.passwordHash != null,
     devOtp: process.env.NODE_ENV !== "production" ? otp : undefined,
   });
 });
 
 export const transferConfirm: RequestHandler = asyncHandler(async (req, res) => {
-  const { transferToken, otp } = req.body as { transferToken?: string; otp?: string };
-  if (!transferToken || !otp) throw new AppError(400, "Transfer token and OTP required.");
+  const { transferToken, otp, password, method } = req.body as {
+    transferToken?: string;
+    otp?: string;
+    password?: string;
+    method?: "otp_email" | "password";
+  };
+  if (!transferToken) throw new AppError(400, "Transfer token required.");
+  if (method !== "password" && !otp) throw new AppError(400, "Transfer token and OTP required.");
+  if (method === "password") {
+    passwordSchema.parse(password);
+    if (!password) throw new AppError(400, "Password required.");
+  }
 
   const raw = await getRedis().get(`transfer:${transferToken}`);
   if (!raw) throw new AppError(410, "Transfer request expired or already executed.");
@@ -129,8 +141,13 @@ export const transferConfirm: RequestHandler = asyncHandler(async (req, res) => 
   const user = await prisma.user.findUnique({ where: { id: data.userId } });
   if (!user) throw new AppError(404, "User not found.");
 
-  const ok = await verifyOtp(user.email, otp, "transfer_approval");
-  if (!ok) throw new AppError(401, "Invalid or expired OTP.");
+  let ok = false;
+  if (method === "password") {
+    if (user.passwordHash) ok = await verifyPassword(user.passwordHash, password ?? "");
+  } else {
+    ok = await verifyOtp(user.email, otp ?? "", "transfer_approval");
+  }
+  if (!ok) throw new AppError(401, "Invalid or expired confirmation.");
 
   const tx = await executeTransfer(data.userId, data.recipient, data.amount, data.note);
   await getRedis().del(`transfer:${transferToken}`);

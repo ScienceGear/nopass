@@ -27,6 +27,32 @@ export const keystrokeSampleSchema = z
   .max(600)
   .optional();
 
+/** Password fallback policy — minimum 10 chars, with letters + digits. */
+export const passwordSchema = z
+  .string()
+  .min(10)
+  .max(128)
+  .refine((v) => /[a-zA-Z]/.test(v) && /\d/.test(v), {
+    message: "Password must contain at least one letter and one number.",
+  });
+
+export const passwordLoginSchema = z.object({
+  email: z.string().email(),
+  password: passwordSchema,
+  keystrokes: keystrokeSampleSchema,
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+});
+
+export const passwordSetSchema = z.object({
+  password: passwordSchema,
+  currentPassword: z.string().optional(),
+});
+
+export const passwordRemoveSchema = z.object({
+  password: passwordSchema,
+});
+
 export const loginVerifySchema = z.object({
   email: z.string().email(),
   credential: z.object({
@@ -52,10 +78,11 @@ export const qrApproveSchema = z.object({
 });
 
 export const stepUpVerifySchema = z.object({
-  method: z.enum(["otp_email", "passkey", "recovery_code"]),
+  method: z.enum(["otp_email", "passkey", "recovery_code", "password"]),
   email: z.string().email(),
   otp: z.string().length(6).optional(),
   code: z.string().min(4).optional(),
+  password: passwordSchema.optional(),
   credential: z.any().optional(),
   deviceFingerprint: z.string().min(8).max(256),
   deviceInfo: z.string().min(1).max(512),

@@ -28,6 +28,7 @@ export interface UserProfile {
   phoneMasked: string;
   avatarUrl: string | null;
   memberSince: string;
+  hasPassword: boolean;
 }
 
 export interface AccountSummary {
@@ -91,7 +92,7 @@ export interface Session {
 
 export interface LoginResult {
   stepUpRequired: boolean;
-  method?: "otp_email" | "passkey";
+  method?: "otp_email" | "passkey" | "password";
   riskScore: number;
   riskLevel: RiskLevel;
   riskAction: RiskAction;
@@ -106,6 +107,7 @@ export interface TransferResult {
   requiresStepUp: boolean;
   intentId: string;
   reference: string;
+  hasPassword?: boolean;
   devOtp?: string;
 }
 
@@ -254,14 +256,15 @@ export async function postRegisterVerify(input: {
 }
 
 export async function postLoginOptions(input: { email: string }) {
-  const res = await apiFetch<{ options: PublicKeyCredentialRequestOptionsJSON; email: string }>(
-    "/auth/login/options",
-    {
-      method: "POST",
-      body: JSON.stringify({ email: input.email }),
-    },
-  );
-  return res;
+  const res = await apiFetch<{
+    options: PublicKeyCredentialRequestOptionsJSON;
+    email: string;
+    hasPassword: boolean;
+  }>("/auth/login/options", {
+    method: "POST",
+    body: JSON.stringify({ email: input.email }),
+  });
+  return { options: res.options, email: res.email, hasPassword: res.hasPassword };
 }
 
 export async function postLoginVerify(input: {
@@ -340,11 +343,94 @@ function defaultReason(score: number, action: string): string {
   return "Known device, usual location, typical hour.";
 }
 
+export async function postPasswordLogin(input: {
+  email: string;
+  password: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+  deviceFingerprint: string;
+  deviceInfo: string;
+}): Promise<LoginResult> {
+  const res = await apiFetch<{
+    stepUpRequired: boolean;
+    method?: "otp_email" | "passkey";
+    riskScore: number;
+    riskAction: string;
+    reason?: string;
+    devOtp?: string;
+    options?: PublicKeyCredentialRequestOptionsJSON;
+    accessToken?: string;
+    refreshToken?: string;
+    user?: { name: string; email: string };
+  }>("/auth/password/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  const riskLevel: RiskLevel = res.riskScore > 60 ? "high" : res.riskScore > 30 ? "medium" : "low";
+  const riskAction: RiskAction =
+    res.riskAction === "block" ? "block" : res.riskAction === "allow" ? "allow" : "step_up";
+  const reason = res.reason ?? defaultReason(res.riskScore, res.riskAction);
+
+  if (res.stepUpRequired) {
+    return {
+      stepUpRequired: true,
+      ...(res.method ? { method: res.method } : {}),
+      riskScore: res.riskScore,
+      riskLevel,
+      riskAction,
+      reason,
+      ...(res.devOtp ? { devOtp: res.devOtp } : {}),
+      ...(res.options ? { options: res.options } : {}),
+    };
+  }
+
+  if (res.accessToken && res.refreshToken && res.user) {
+    saveSession({
+      accessToken: res.accessToken,
+      refreshToken: res.refreshToken,
+      name: res.user.name,
+      email: res.user.email,
+    });
+    return {
+      stepUpRequired: false,
+      riskScore: res.riskScore,
+      riskLevel,
+      riskAction,
+      reason,
+      session: {
+        accessToken: res.accessToken,
+        refreshToken: res.refreshToken,
+        name: res.user.name,
+        email: res.user.email,
+      },
+    };
+  }
+
+  return { stepUpRequired: false, riskScore: res.riskScore, riskLevel, riskAction, reason };
+}
+
+export async function postSetPassword(input: { password: string; currentPassword?: string }) {
+  return apiFetch<{ ok: boolean; hasPassword: boolean }>("/auth/password/set", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postRemovePassword(input: { password: string }) {
+  return apiFetch<{ ok: boolean; hasPassword: boolean }>("/auth/password/remove", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+}
+
 export async function postStepUpVerify(input: {
-  method: "otp_email" | "passkey" | "recovery_code";
+  method: "otp_email" | "passkey" | "recovery_code" | "password";
   email: string;
   otp?: string;
   code?: string;
+  password?: string;
   credential?: AuthenticationResponseJSON;
   keystrokes: { prev: number; curr: number; delta: number }[];
   deviceFingerprint: string;
@@ -485,6 +571,7 @@ export async function postTransfer(input: {
     stepUpRequired?: boolean;
     transferToken?: string;
     devOtp?: string;
+    hasPassword?: boolean;
     transaction?: { id: string };
   }>("/account/transfer", {
     method: "POST",
@@ -511,10 +598,16 @@ export async function postTransfer(input: {
     intentId: res.transferToken ?? "",
     reference: `NB${Math.floor(Math.random() * 9e7 + 1e7)}`,
     ...(res.devOtp ? { devOtp: res.devOtp } : {}),
+    ...(typeof res.hasPassword === "boolean" ? { hasPassword: res.hasPassword } : {}),
   };
 }
 
-export async function postTransferConfirm(input: { transferToken: string; otp: string }) {
+export async function postTransferConfirm(input: {
+  transferToken: string;
+  otp?: string;
+  password?: string;
+  method?: "otp_email" | "password";
+}) {
   const res = await apiFetch<{
     executed: boolean;
     transaction: {
@@ -704,7 +797,14 @@ export async function revokeDevice(id: string) {
 
 export async function getProfile(): Promise<UserProfile> {
   const res = await apiFetch<{
-    user: { id: string; email: string; name: string; balance: string; createdAt: string };
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      balance: string;
+      createdAt: string;
+      hasPassword: boolean;
+    };
   }>("/user/profile", { headers: authHeaders() });
 
   return {
@@ -714,6 +814,7 @@ export async function getProfile(): Promise<UserProfile> {
     phoneMasked: "+91 ••••• ••••",
     avatarUrl: null,
     memberSince: res.user.createdAt,
+    hasPassword: res.user.hasPassword,
   };
 }
 
