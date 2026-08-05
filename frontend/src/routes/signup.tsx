@@ -44,8 +44,8 @@ function Signup() {
   const keys = useKeystrokeCapture();
 
   React.useEffect(() => {
-    if (session) navigate({ to: "/dashboard" });
-  }, [session, navigate]);
+    if (session && step !== 3) navigate({ to: "/dashboard" });
+  }, [session, navigate, step]);
 
   async function goToPasskey(e: React.FormEvent) {
     e.preventDefault();
@@ -82,7 +82,9 @@ function Signup() {
       });
     } catch (err) {
       setPhase("error");
-      setError(err instanceof Error ? err.message : "Your device cancelled the request. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Your device cancelled the request. Try again.",
+      );
     }
   }
 
@@ -231,9 +233,9 @@ function Signup() {
                   <div className="space-y-2">
                     <h1 className="text-2xl">Account created</h1>
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      Save these 10 recovery codes somewhere offline. They&apos;re the only way
-                      back in if you ever lose every device. We don&apos;t store them — this is the
-                      only time you&apos;ll see them.
+                      Save these 10 recovery codes somewhere offline. They&apos;re the only way back
+                      in if you ever lose every device. We don&apos;t store them — this is the only
+                      time you&apos;ll see them.
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 text-left font-mono text-sm tracking-[0.08em]">

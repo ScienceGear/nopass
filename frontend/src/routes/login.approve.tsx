@@ -222,7 +222,11 @@ function MobileApprove({ token }: { token: string }) {
               size="lg"
               className="w-full"
               disabled={phase === "waiting"}
-              onClick={() => postQrApprove({ token, decision: "deny", deviceInfo: getDeviceInfo() }).catch(() => undefined)}
+              onClick={() =>
+                postQrApprove({ token, decision: "deny", deviceInfo: getDeviceInfo() }).catch(
+                  () => undefined,
+                )
+              }
             >
               Deny
             </Button>

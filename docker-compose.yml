@@ -1,0 +1,70 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: novabank
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - novabank_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d novabank"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/novabank?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3001
+      WEBAUTHN_RP_NAME: NovaBank
+      WEBAUTHN_RP_ID: localhost
+      WEBAUTHN_ORIGIN: http://localhost:5173
+      NODE_ENV: development
+      # Fill in before `docker compose up` (or copy from backend/.env.example):
+      JWT_SECRET: ${JWT_SECRET:-change-me-256-bit-random}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too-256-bit-random}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.ethereal.email}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      HIBP_API_KEY: ${HIBP_API_KEY:-}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+
+  web:
+    build: ./frontend
+    depends_on:
+      - api
+    environment:
+      API_PROXY_TARGET: http://api:3001
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+
+volumes:
+  novabank_pg:

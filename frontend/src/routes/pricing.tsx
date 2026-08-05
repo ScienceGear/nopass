@@ -44,8 +44,8 @@ function Pricing() {
           </Reveal>
           <Reveal delay={140}>
             <p className="mx-auto mt-5 max-w-[30rem] text-sm leading-relaxed text-muted-foreground sm:text-base">
-              No monthly fees. No minimum balance. No fine print. The risk engine, the passkeys,
-              the alerts — all included.
+              No monthly fees. No minimum balance. No fine print. The risk engine, the passkeys, the
+              alerts — all included.
             </p>
           </Reveal>
         </section>
@@ -58,8 +58,7 @@ function Pricing() {
                   ₹0<span className="text-lg font-semibold text-muted-foreground">/month</span>
                 </p>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Every feature in the product, including passkey step-up and live session
-                  scoring.
+                  Every feature in the product, including passkey step-up and live session scoring.
                 </p>
                 <div className="mt-7">
                   <Button size="lg" className="w-full" asChild>

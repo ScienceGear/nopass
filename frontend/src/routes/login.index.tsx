@@ -7,12 +7,7 @@ import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt
 import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  postLoginOptions,
-  postLoginVerify,
-  postStepUpVerify,
-  type LoginResult,
-} from "@/lib/api";
+import { postLoginOptions, postLoginVerify, postStepUpVerify, type LoginResult } from "@/lib/api";
 import { getDeviceFingerprint, getDeviceInfo } from "@/lib/fingerprint";
 import { useKeystrokeCapture } from "@/lib/keystroke";
 import { useSession } from "@/lib/session";
@@ -68,7 +63,10 @@ function LoginPage() {
         return;
       }
       const keystrokes = emailKeys.getSamples();
-      const [deviceFingerprint, deviceInfo] = await Promise.all([getDeviceFingerprint(), Promise.resolve(getDeviceInfo())]);
+      const [deviceFingerprint, deviceInfo] = await Promise.all([
+        getDeviceFingerprint(),
+        Promise.resolve(getDeviceInfo()),
+      ]);
 
       const { options } = await postLoginOptions({ email });
       setStage("passkey");
@@ -134,7 +132,10 @@ function LoginPage() {
     setError(null);
     try {
       const keystrokes = otpKeys.getSamples();
-      const [deviceFingerprint, deviceInfo] = await Promise.all([getDeviceFingerprint(), Promise.resolve(getDeviceInfo())]);
+      const [deviceFingerprint, deviceInfo] = await Promise.all([
+        getDeviceFingerprint(),
+        Promise.resolve(getDeviceInfo()),
+      ]);
       await postStepUpVerify({
         method: "otp_email",
         email,

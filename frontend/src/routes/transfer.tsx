@@ -16,7 +16,7 @@ export const Route = createFileRoute("/transfer")({
       { title: "Send money — NovaBank" },
       {
         name: "description",
-        content: "Send money in seconds. Transfers above ₹10,000 ask for one extra check.",
+        content: "Send money in seconds. Transfers above ₹50,000 ask for one extra check.",
       },
       { property: "og:title", content: "Send money with NovaBank" },
       {
@@ -69,7 +69,9 @@ function Transfer() {
           description: "We emailed a code to confirm this transfer.",
         });
       } else {
-        toast.success("Transfer sent", { description: `${formatINR(amountMinor)} to ${recipient}` });
+        toast.success("Transfer sent", {
+          description: `${formatINR(amountMinor)} to ${recipient}`,
+        });
         setReceipt({ reference: res.reference, amountMinor });
       }
     } catch (err) {
@@ -137,8 +139,9 @@ function Transfer() {
                 <PillBadge icon={<MailCheck />}>Confirm this transfer</PillBadge>
                 <h1 className="mt-4 text-2xl">One last check</h1>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {formatINR(amountMinor)} to <span className="font-medium text-ink">{recipient}</span>{" "}
-                  is above your instant limit. We emailed a 6-digit code to your inbox.
+                  {formatINR(amountMinor)} to{" "}
+                  <span className="font-medium text-ink">{recipient}</span> is above your instant
+                  limit. We emailed a 6-digit code to your inbox.
                 </p>
 
                 <div className="mt-5 hairline-y rounded-2xl bg-muted px-4 text-left">
@@ -162,7 +165,8 @@ function Transfer() {
                     className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
                   />
                   <Button type="submit" size="lg" className="w-full" disabled={confirming}>
-                    {confirming ? "Verifying…" : "Confirm and send"} <ArrowRight className="size-4" />
+                    {confirming ? "Verifying…" : "Confirm and send"}{" "}
+                    <ArrowRight className="size-4" />
                   </Button>
                   <button
                     type="button"
@@ -180,7 +184,7 @@ function Transfer() {
           ) : (
             <Reveal>
               <Panel>
-                <PillBadge icon={<ShieldCheck />}>Step-up above ₹10,000</PillBadge>
+                <PillBadge icon={<ShieldCheck />}>Step-up above ₹50,000</PillBadge>
                 <h1 className="mt-4 text-2xl">Send money</h1>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   Small transfers go straight through. Large ones ask your phone to confirm once

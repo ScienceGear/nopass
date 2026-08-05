@@ -9,7 +9,8 @@ export const Route = createFileRoute("/about")({
       { title: "About NovaBank" },
       {
         name: "description",
-        content: "NovaBank is a demo of passwordless banking built on passkeys and live risk scoring.",
+        content:
+          "NovaBank is a demo of passwordless banking built on passkeys and live risk scoring.",
       },
       { property: "og:title", content: "About NovaBank" },
       { property: "og:description", content: "Banking that can't be phished — a demo product." },
@@ -68,7 +69,9 @@ function About() {
               <Reveal key={title} delay={i * 80}>
                 <div className="h-full rounded-3xl bg-muted p-6">
                   <p className="font-semibold">{title}</p>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {description}
+                  </p>
                 </div>
               </Reveal>
             ))}

@@ -17,6 +17,14 @@ export default defineConfig({
       // Pinned so WEBAUTHN_ORIGIN on the backend (http://localhost:5173) always matches.
       port: 5173,
       strictPort: true,
+      proxy: {
+        // Dev proxy: forward /api to the Express backend on 3001
+        // (override with API_PROXY_TARGET when running inside Docker).
+        "/api": {
+          target: process.env["API_PROXY_TARGET"] ?? "http://localhost:3001",
+          changeOrigin: true,
+        },
+      },
     },
   },
 });

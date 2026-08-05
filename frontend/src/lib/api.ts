@@ -109,7 +109,7 @@ export interface TransferResult {
   devOtp?: string;
 }
 
-export const STEP_UP_THRESHOLD_MINOR = 1_000_000; // ₹10,000 → step-up OTP
+export const STEP_UP_THRESHOLD_MINOR = 5_000_000; // ₹50,000 → step-up OTP
 
 export function formatINR(minor: number, opts?: { signed?: boolean }) {
   const value = Math.abs(minor) / 100;
@@ -131,7 +131,7 @@ const notificationPrefs = [
   },
   {
     id: "large_transfer",
-    label: "Email me for transfers above ₹10,000",
+    label: "Email me for transfers above ₹50,000",
     hint: "Receipt plus the device that approved it",
     enabled: true,
   },
@@ -220,10 +220,13 @@ export async function postRegisterOptions(input: {
   name: string;
   email: string;
 }): Promise<PublicKeyCredentialCreationOptionsJSON> {
-  const res = await apiFetch<{ options: PublicKeyCredentialCreationOptionsJSON }>("/auth/register/options", {
-    method: "POST",
-    body: JSON.stringify({ name: input.name, email: input.email }),
-  });
+  const res = await apiFetch<{ options: PublicKeyCredentialCreationOptionsJSON }>(
+    "/auth/register/options",
+    {
+      method: "POST",
+      body: JSON.stringify({ name: input.name, email: input.email }),
+    },
+  );
   return res.options;
 }
 
@@ -251,10 +254,13 @@ export async function postRegisterVerify(input: {
 }
 
 export async function postLoginOptions(input: { email: string }) {
-  const res = await apiFetch<{ options: PublicKeyCredentialRequestOptionsJSON; email: string }>("/auth/login/options", {
-    method: "POST",
-    body: JSON.stringify({ email: input.email }),
-  });
+  const res = await apiFetch<{ options: PublicKeyCredentialRequestOptionsJSON; email: string }>(
+    "/auth/login/options",
+    {
+      method: "POST",
+      body: JSON.stringify({ email: input.email }),
+    },
+  );
   return res;
 }
 
@@ -312,7 +318,12 @@ export async function postLoginVerify(input: {
       riskLevel,
       riskAction,
       reason,
-      session: { accessToken: res.accessToken, refreshToken: res.refreshToken, name: res.user.name, email: res.user.email },
+      session: {
+        accessToken: res.accessToken,
+        refreshToken: res.refreshToken,
+        name: res.user.name,
+        email: res.user.email,
+      },
     };
   }
 
@@ -320,9 +331,12 @@ export async function postLoginVerify(input: {
 }
 
 function defaultReason(score: number, action: string): string {
-  if (action === "block") return "Our risk engine stopped this sign-in. If this was you, contact support.";
-  if (action === "step_up_email") return `Unusual sign-in detected (score ${score}). We emailed you a one-time code.`;
-  if (action === "step_up_passkey") return `Unusual sign-in detected (score ${score}). Confirm once more with your passkey.`;
+  if (action === "block")
+    return "Our risk engine stopped this sign-in. If this was you, contact support.";
+  if (action === "step_up_email")
+    return `Unusual sign-in detected (score ${score}). We emailed you a one-time code.`;
+  if (action === "step_up_passkey")
+    return `Unusual sign-in detected (score ${score}). Confirm once more with your passkey.`;
   return "Known device, usual location, typical hour.";
 }
 
@@ -357,10 +371,13 @@ export async function postStepUpVerify(input: {
 /* ── QR cross-device login ─────────────────────────────────────────────── */
 
 export async function postQrCreate() {
-  const res = await apiFetch<{ token: string; expiresAt: string; qrImage: string }>("/auth/login/qr/create", {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+  const res = await apiFetch<{ token: string; expiresAt: string; qrImage: string }>(
+    "/auth/login/qr/create",
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
   return { token: res.token, expiresAt: res.expiresAt, qrImage: res.qrImage };
 }
 
@@ -374,7 +391,11 @@ export async function getQrStatus(token: string) {
   }>(`/auth/login/qr/status/${encodeURIComponent(token)}`);
 }
 
-export async function postQrApprove(input: { token: string; decision: "approve" | "deny"; deviceInfo: string }) {
+export async function postQrApprove(input: {
+  token: string;
+  decision: "approve" | "deny";
+  deviceInfo: string;
+}) {
   return apiFetch<{ status: string }>("/auth/login/qr/approve", {
     method: "POST",
     body: JSON.stringify(input),
@@ -424,7 +445,10 @@ export async function getAccountSummary(): Promise<AccountSummary> {
   };
 }
 
-export async function getTransactions(): Promise<{ items: Transaction[]; nextCursor: string | null }> {
+export async function getTransactions(): Promise<{
+  items: Transaction[];
+  nextCursor: string | null;
+}> {
   const res = await apiFetch<{
     transactions: {
       id: string;
@@ -644,7 +668,11 @@ export async function postRegenerateRecoveryCodes() {
     method: "POST",
     headers: authHeaders(),
   });
-  return { remaining: res.recoveryCodes.length, total: res.recoveryCodes.length, codes: res.recoveryCodes };
+  return {
+    remaining: res.recoveryCodes.length,
+    total: res.recoveryCodes.length,
+    codes: res.recoveryCodes,
+  };
 }
 
 export async function getNotificationPrefs() {
