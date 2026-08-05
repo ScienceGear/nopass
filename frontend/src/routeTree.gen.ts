@@ -10,8 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TransferRouteImport } from './routes/transfer'
 import { Route as LoginIndexRouteImport } from './routes/login.index'
@@ -23,6 +27,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountsRoute = AccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ActivityRoute = ActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
@@ -31,6 +45,16 @@ const ActivityRoute = ActivityRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -61,8 +85,12 @@ const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
   '/dashboard': typeof DashboardRoute
+  '/pricing': typeof PricingRoute
+  '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/transfer': typeof TransferRoute
   '/login/approve': typeof LoginApproveRoute
@@ -71,8 +99,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
   '/dashboard': typeof DashboardRoute
+  '/pricing': typeof PricingRoute
+  '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/transfer': typeof TransferRoute
   '/login/approve': typeof LoginApproveRoute
@@ -82,8 +114,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/accounts': typeof AccountsRoute
   '/activity': typeof ActivityRoute
   '/dashboard': typeof DashboardRoute
+  '/pricing': typeof PricingRoute
+  '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/transfer': typeof TransferRoute
   '/login/approve': typeof LoginApproveRoute
@@ -94,8 +130,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/about'
+    | '/accounts'
     | '/activity'
     | '/dashboard'
+    | '/pricing'
+    | '/security'
     | '/signup'
     | '/transfer'
     | '/login/approve'
@@ -104,8 +144,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/about'
+    | '/accounts'
     | '/activity'
     | '/dashboard'
+    | '/pricing'
+    | '/security'
     | '/signup'
     | '/transfer'
     | '/login/approve'
@@ -114,8 +158,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/about'
+    | '/accounts'
     | '/activity'
     | '/dashboard'
+    | '/pricing'
+    | '/security'
     | '/signup'
     | '/transfer'
     | '/login/approve'
@@ -125,8 +173,12 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  AccountsRoute: typeof AccountsRoute
   ActivityRoute: typeof ActivityRoute
   DashboardRoute: typeof DashboardRoute
+  PricingRoute: typeof PricingRoute
+  SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
   TransferRoute: typeof TransferRoute
   LoginApproveRoute: typeof LoginApproveRoute
@@ -143,6 +195,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accounts': {
+      id: '/accounts'
+      path: '/accounts'
+      fullPath: '/accounts'
+      preLoaderRoute: typeof AccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/activity': {
       id: '/activity'
       path: '/activity'
@@ -155,6 +221,20 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -197,8 +277,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  AccountsRoute: AccountsRoute,
   ActivityRoute: ActivityRoute,
   DashboardRoute: DashboardRoute,
+  PricingRoute: PricingRoute,
+  SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
   TransferRoute: TransferRoute,
   LoginApproveRoute: LoginApproveRoute,

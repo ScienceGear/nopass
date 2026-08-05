@@ -1,19 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { QRCodeSVG } from "qrcode.react";
-import { Check, MapPin, MonitorSmartphone, Smartphone } from "lucide-react";
+import { Check, MonitorSmartphone, Smartphone } from "lucide-react";
 import { Button, MetaLine, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Shimmer } from "@/components/nova/skeletons";
-import { getQrStatus, postQrApprove, postQrCreate } from "@/lib/api";
-import { saveSession } from "@/lib/session";
+import { getQrStatus, postQrApprove, postQrCreate, postQrExchange } from "@/lib/api";
+import { getDeviceFingerprint, getDeviceInfo } from "@/lib/fingerprint";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login/approve")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    t: typeof search["t"] === "string" ? (search["t"] as string) : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const t = typeof search["t"] === "string" ? search["t"] : undefined;
+    return t ? { t } : {};
+  },
   head: () => ({
     meta: [
       { title: "Approve a NovaBank sign-in from your phone" },
@@ -49,35 +49,51 @@ function ApprovePage() {
 
 function DesktopQr() {
   const navigate = useNavigate();
-  const [payload, setPayload] = React.useState<{ pollToken: string; payloadUrl: string } | null>(
+  const [qr, setQr] = React.useState<{ token: string; expiresAt: string; qrImage: string } | null>(
     null,
   );
   const [status, setStatus] = React.useState<"pending" | "approved">("pending");
 
   React.useEffect(() => {
-    let attempt = 0;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
     (async () => {
-      const created = await postQrCreate();
-      if (cancelled) return;
-      setPayload(created);
-
-      const poll = async () => {
-        attempt += 1;
-        const res = await getQrStatus(created.pollToken, attempt);
+      try {
+        const created = await postQrCreate();
         if (cancelled) return;
-        if (res.status === "approved") {
-          setStatus("approved");
-          saveSession({ token: res.session?.token ?? "demo", name: "Rohan Patil" });
-          toast.success("Approved on your phone");
-          timer = setTimeout(() => navigate({ to: "/dashboard" }), 1100);
-        } else {
-          timer = setTimeout(poll, 1400);
-        }
-      };
-      timer = setTimeout(poll, 1200);
+        setQr(created);
+
+        const poll = async () => {
+          if (cancelled) return;
+          const res = await getQrStatus(created.token);
+          if (cancelled) return;
+          if (res.status === "approved" && res.grantToken) {
+            setStatus("approved");
+            const [deviceFingerprint, deviceInfo] = await Promise.all([
+              getDeviceFingerprint(),
+              Promise.resolve(getDeviceInfo()),
+            ]);
+            await postQrExchange({
+              grantToken: res.grantToken,
+              deviceFingerprint,
+              deviceInfo,
+              keystrokes: [],
+            });
+            toast.success("Signed in", { description: "Approved on your phone." });
+            timer = setTimeout(() => navigate({ to: "/dashboard" }), 900);
+          } else if (res.status === "denied") {
+            toast.error("Sign-in denied on your phone");
+          } else if (res.status === "expired") {
+            toast.error("This code expired. Refresh to try again.");
+          } else {
+            timer = setTimeout(poll, 1500);
+          }
+        };
+        timer = setTimeout(poll, 1200);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not start sign-in.");
+      }
     })();
 
     return () => {
@@ -99,18 +115,18 @@ function DesktopQr() {
         </p>
 
         <div className="mx-auto mt-7 grid size-[15rem] place-items-center rounded-3xl bg-lime-soft p-4">
-          {payload ? (
+          {qr ? (
             status === "approved" ? (
               <span className="grid size-20 place-items-center rounded-3xl bg-card text-[oklch(0.52_0.14_152)]">
                 <Check className="size-10" strokeWidth={2.4} />
               </span>
             ) : (
-              <QRCodeSVG
-                value={payload.payloadUrl}
-                size={196}
-                bgColor="transparent"
-                fgColor="#12181F"
-                level="M"
+              <img
+                src={qr.qrImage}
+                alt="Scan this code with your phone to sign in"
+                width={196}
+                height={196}
+                className="size-[12.25rem] rounded-xl"
               />
             )
           ) : (
@@ -127,9 +143,8 @@ function DesktopQr() {
         </p>
 
         <div className="mt-6 hairline-y border-t border-[oklch(0.207_0.014_251_/_0.07)] text-left">
-          <MetaLine label="Requested by" value="MacBook Air · Chrome" />
-          <MetaLine label="Location" value="Pune, India" />
-          <MetaLine label="Expires in" value="2:00" />
+          <MetaLine label="Requested by" value="This browser" />
+          <MetaLine label="Expires" value="5 minutes" />
         </div>
 
         <Link
@@ -147,12 +162,20 @@ function DesktopQr() {
 
 function MobileApprove({ token }: { token: string }) {
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
+  const [error, setError] = React.useState<string | null>(null);
 
   async function approve() {
     setPhase("waiting");
-    await postQrApprove({ pollToken: token });
-    setPhase("success");
-    toast.success("Sign-in approved");
+    setError(null);
+    try {
+      const deviceInfo = getDeviceInfo();
+      await postQrApprove({ token, decision: "approve", deviceInfo });
+      setPhase("success");
+      toast.success("Sign-in approved");
+    } catch (err) {
+      setPhase("error");
+      setError(err instanceof Error ? err.message : "Could not approve.");
+    }
   }
 
   return (
@@ -175,20 +198,18 @@ function MobileApprove({ token }: { token: string }) {
             label="Device"
             value={
               <span className="flex items-center gap-1.5">
-                <MonitorSmartphone className="size-3.5" /> MacBook Air · Chrome
-              </span>
-            }
-          />
-          <MetaLine
-            label="Location"
-            value={
-              <span className="flex items-center gap-1.5">
-                <MapPin className="size-3.5" /> Pune, India
+                <MonitorSmartphone className="size-3.5" /> Requesting browser
               </span>
             }
           />
           <MetaLine label="Request" value={<span className="font-mono text-xs">{token}</span>} />
         </div>
+
+        {error ? (
+          <p className="mt-4 rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
 
         {phase !== "success" ? (
           <div className="mt-6 space-y-2">
@@ -196,8 +217,14 @@ function MobileApprove({ token }: { token: string }) {
               <Smartphone className="size-[1.05rem]" />
               {phase === "waiting" ? "Waiting for your device…" : "Approve with passkey"}
             </Button>
-            <Button variant="ghost" size="lg" className="w-full" asChild>
-              <Link to="/login">Deny</Link>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="w-full"
+              disabled={phase === "waiting"}
+              onClick={() => postQrApprove({ token, decision: "deny", deviceInfo: getDeviceInfo() }).catch(() => undefined)}
+            >
+              Deny
             </Button>
           </div>
         ) : null}

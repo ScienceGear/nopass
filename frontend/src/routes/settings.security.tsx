@@ -72,7 +72,7 @@ function SecuritySettings() {
                   disabled={adding}
                   onClick={async () => {
                     setAdding(true);
-                    const pk = await postPasskey({ deviceName: "New device" });
+                    const pk = await postPasskey();
                     setList((l) => [...l, pk]);
                     setAdding(false);
                     toast.success("Passkey added");

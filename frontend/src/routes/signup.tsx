@@ -1,13 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { ArrowRight, ChevronDown, Mail, ShieldCheck, User } from "lucide-react";
+import { startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
+import { ArrowRight, Check, ChevronDown, Mail, ShieldCheck, User } from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { postRegisterOptions, postRegisterVerify } from "@/lib/api";
-import { saveSession } from "@/lib/session";
+import { useKeystrokeCapture } from "@/lib/keystroke";
+import { useSession } from "@/lib/session";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/signup")({
@@ -31,12 +33,19 @@ export const Route = createFileRoute("/signup")({
 
 function Signup() {
   const navigate = useNavigate();
-  const [step, setStep] = React.useState<1 | 2>(1);
+  const { session } = useSession();
+  const [step, setStep] = React.useState<1 | 2 | 3>(1);
   const [name, setName] = React.useState("Rohan Patil");
   const [email, setEmail] = React.useState("rohan.patil@hey.com");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [error, setError] = React.useState<string | null>(null);
   const [why, setWhy] = React.useState(false);
+  const [recoveryCodes, setRecoveryCodes] = React.useState<string[]>([]);
+  const keys = useKeystrokeCapture();
+
+  React.useEffect(() => {
+    if (session) navigate({ to: "/dashboard" });
+  }, [session, navigate]);
 
   async function goToPasskey(e: React.FormEvent) {
     e.preventDefault();
@@ -45,24 +54,35 @@ function Signup() {
       return;
     }
     setError(null);
-    await postRegisterOptions({ name, email });
-    setStep(2);
+    try {
+      if (!browserSupportsWebAuthn()) {
+        setError("This browser doesn't support passkeys yet. Try Chrome, Edge or Safari.");
+        return;
+      }
+      await postRegisterOptions({ name, email });
+      setStep(2);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start registration.");
+    }
   }
 
   async function createPasskey() {
     setPhase("waiting");
     setError(null);
     try {
-      await postRegisterVerify({ credentialId: "cred_demo" });
+      const options = await postRegisterOptions({ name, email });
+      keys.getSamples();
+      const credential = await startRegistration({ optionsJSON: options });
+      const res = await postRegisterVerify({ name, email, credential });
       setPhase("success");
-      saveSession({ token: "demo", name });
+      setRecoveryCodes(res.recoveryCodes);
+      setStep(3);
       toast.success("Passkey created", {
         description: `${name.split(" ")[0]}, your account is live.`,
       });
-      setTimeout(() => navigate({ to: "/dashboard" }), 1100);
-    } catch {
+    } catch (err) {
       setPhase("error");
-      setError("Your device cancelled the request. Try again.");
+      setError(err instanceof Error ? err.message : "Your device cancelled the request. Try again.");
     }
   }
 
@@ -71,7 +91,9 @@ function Signup() {
       <PageShell className="min-h-[calc(100vh-4rem)]">
         <header className="flex items-center justify-between py-4">
           <Logo />
-          <span className="eyebrow">Step {step} of 2</span>
+          <span className="eyebrow">
+            Step {step} of {step === 3 ? "3" : "2"}
+          </span>
         </header>
 
         <div className="flex flex-col items-center justify-center py-10 sm:py-16">
@@ -79,7 +101,7 @@ function Signup() {
             <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 shadow-card sm:p-8">
               {/* progress hairline */}
               <div className="mb-7 flex gap-1.5">
-                {[1, 2].map((s) => (
+                {[1, 2, 3].map((s) => (
                   <span
                     key={s}
                     className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
@@ -122,6 +144,7 @@ function Signup() {
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
+                          onKeyDown={keys.onKeyDown}
                           className="h-12 rounded-2xl pl-10"
                           placeholder="you@email.com"
                         />
@@ -139,7 +162,7 @@ function Signup() {
                     Continue <ArrowRight className="size-4" />
                   </Button>
                 </form>
-              ) : (
+              ) : step === 2 ? (
                 <div className="space-y-6 text-center">
                   <div className="flex justify-center">
                     <PasskeyGlyph phase={phase} />
@@ -158,22 +181,28 @@ function Signup() {
                     </p>
                   ) : null}
 
-                  {phase === "success" ? (
-                    <p className="font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-[oklch(0.52_0.14_152)]">
-                      Verified · taking you to your account
-                    </p>
-                  ) : (
-                    <Button
-                      size="lg"
-                      className="w-full"
-                      disabled={phase === "waiting"}
-                      onClick={createPasskey}
-                    >
-                      {phase === "waiting"
-                        ? "Waiting for your device…"
-                        : "Continue with Face ID / Touch ID"}
-                    </Button>
-                  )}
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    disabled={phase === "waiting"}
+                    onClick={createPasskey}
+                  >
+                    {phase === "waiting"
+                      ? "Waiting for your device…"
+                      : "Continue with Face ID / Touch ID"}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep(1);
+                      setError(null);
+                      setPhase("idle");
+                    }}
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                  >
+                    ← Back to details
+                  </button>
 
                   {/* Why no password — expandable */}
                   <button
@@ -193,6 +222,32 @@ function Signup() {
                       your device.
                     </p>
                   ) : null}
+                </div>
+              ) : (
+                <div className="space-y-5 text-center">
+                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-[oklch(0.52_0.14_152)]">
+                    <Check className="size-7" strokeWidth={2.4} />
+                  </span>
+                  <div className="space-y-2">
+                    <h1 className="text-2xl">Account created</h1>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      Save these 10 recovery codes somewhere offline. They&apos;re the only way
+                      back in if you ever lose every device. We don&apos;t store them — this is the
+                      only time you&apos;ll see them.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 text-left font-mono text-sm tracking-[0.08em]">
+                    {recoveryCodes.map((c) => (
+                      <span key={c}>{c}</span>
+                    ))}
+                  </div>
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={() => navigate({ to: "/dashboard" })}
+                  >
+                    I&apos;ve saved these — go to my account <ArrowRight className="size-4" />
+                  </Button>
                 </div>
               )}
             </div>

@@ -22,7 +22,7 @@ import { TransactionRow } from "@/components/nova/rows";
 import { BalanceSkeleton, ListSkeleton } from "@/components/nova/skeletons";
 import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { getAccountSummary, getTransactions, getActivity } from "@/lib/api";
-import { formatINR } from "@/lib/mockData";
+import { formatINR } from "@/lib/api";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({

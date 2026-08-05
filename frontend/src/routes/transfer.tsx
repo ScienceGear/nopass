@@ -1,14 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { ArrowRight, Check, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, MailCheck, ShieldCheck } from "lucide-react";
 import { Button, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
-import { PasskeyPrompt, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { postStepUpVerify, postTransfer } from "@/lib/api";
-import { formatINR, STEP_UP_THRESHOLD_MINOR } from "@/lib/mockData";
+import { formatINR, postTransfer, postTransferConfirm, STEP_UP_THRESHOLD_MINOR } from "@/lib/api";
+import { useKeystrokeCapture } from "@/lib/keystroke";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/transfer")({
@@ -17,12 +16,12 @@ export const Route = createFileRoute("/transfer")({
       { title: "Send money — NovaBank" },
       {
         name: "description",
-        content: "Send money in seconds. Transfers above ₹10,000 ask for one extra passkey check.",
+        content: "Send money in seconds. Transfers above ₹10,000 ask for one extra check.",
       },
       { property: "og:title", content: "Send money with NovaBank" },
       {
         property: "og:description",
-        content: "Instant transfers with passkey step-up on large amounts.",
+        content: "Instant transfers with step-up verification on large amounts.",
       },
     ],
   }),
@@ -35,11 +34,17 @@ function Transfer() {
   const [amount, setAmount] = React.useState("");
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [stepUp, setStepUp] = React.useState<{ intentId: string; reference: string } | null>(null);
-  const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
+  const [stepUp, setStepUp] = React.useState<{
+    transferToken: string;
+    reference: string;
+    devOtp?: string;
+  } | null>(null);
+  const [otp, setOtp] = React.useState("");
+  const [confirming, setConfirming] = React.useState(false);
   const [receipt, setReceipt] = React.useState<{ reference: string; amountMinor: number } | null>(
     null,
   );
+  const otpKeys = useKeystrokeCapture();
 
   const amountMinor = Math.round((Number(amount) || 0) * 100);
   const needsStepUp = amountMinor >= STEP_UP_THRESHOLD_MINOR;
@@ -51,27 +56,47 @@ function Transfer() {
       return;
     }
     setBusy(true);
-    const res = await postTransfer({ recipient, amountMinor, note });
-    setBusy(false);
-    if (res.requiresStepUp) {
-      setStepUp({ intentId: res.intentId, reference: res.reference });
-      setPhase("idle");
-    } else {
-      toast.success("Transfer sent", { description: `${formatINR(amountMinor)} to ${recipient}` });
-      setReceipt({ reference: res.reference, amountMinor });
+    try {
+      const res = await postTransfer({ recipient, amountMinor, note });
+      if (res.requiresStepUp) {
+        setStepUp({
+          transferToken: res.intentId,
+          reference: res.reference,
+          ...(res.devOtp ? { devOtp: res.devOtp } : {}),
+        });
+        setOtp(res.devOtp ?? "");
+        toast.info("One more step", {
+          description: "We emailed a code to confirm this transfer.",
+        });
+      } else {
+        toast.success("Transfer sent", { description: `${formatINR(amountMinor)} to ${recipient}` });
+        setReceipt({ reference: res.reference, amountMinor });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Transfer failed.");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function verifyStepUp() {
+  async function confirmStepUp(e: React.FormEvent) {
+    e.preventDefault();
     if (!stepUp) return;
-    setPhase("waiting");
-    await postStepUpVerify({ intentId: stepUp.intentId });
-    setPhase("success");
-    setTimeout(() => {
+    if (!/^\d{6}$/.test(otp)) {
+      toast.error("Enter the 6-digit code.");
+      return;
+    }
+    setConfirming(true);
+    try {
+      await postTransferConfirm({ transferToken: stepUp.transferToken, otp });
       setReceipt({ reference: stepUp.reference, amountMinor });
       setStepUp(null);
       toast.success("Transfer verified and sent");
-    }, 900);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "That code didn't match.");
+    } finally {
+      setConfirming(false);
+    }
   }
 
   return (
@@ -106,13 +131,59 @@ function Transfer() {
                 </Button>
               </Panel>
             </Reveal>
+          ) : stepUp ? (
+            <Reveal>
+              <Panel>
+                <PillBadge icon={<MailCheck />}>Confirm this transfer</PillBadge>
+                <h1 className="mt-4 text-2xl">One last check</h1>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {formatINR(amountMinor)} to <span className="font-medium text-ink">{recipient}</span>{" "}
+                  is above your instant limit. We emailed a 6-digit code to your inbox.
+                </p>
+
+                <div className="mt-5 hairline-y rounded-2xl bg-muted px-4 text-left">
+                  <MetaLine label="Amount" value={formatINR(amountMinor)} />
+                  <MetaLine label="To" value={recipient} />
+                  <MetaLine
+                    label="Reference"
+                    value={<span className="font-mono text-xs">{stepUp.reference}</span>}
+                  />
+                </div>
+
+                <form onSubmit={confirmStepUp} className="mt-6 space-y-4">
+                  <Input
+                    autoFocus
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={otpKeys.onKeyDown}
+                    placeholder="••••••"
+                    className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                  />
+                  <Button type="submit" size="lg" className="w-full" disabled={confirming}>
+                    {confirming ? "Verifying…" : "Confirm and send"} <ArrowRight className="size-4" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStepUp(null);
+                      setOtp("");
+                    }}
+                    className="w-full text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                  >
+                    ← Change amount
+                  </button>
+                </form>
+              </Panel>
+            </Reveal>
           ) : (
             <Reveal>
               <Panel>
                 <PillBadge icon={<ShieldCheck />}>Step-up above ₹10,000</PillBadge>
                 <h1 className="mt-4 text-2xl">Send money</h1>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Small transfers go straight through. Large ones ask your device to confirm once
+                  Small transfers go straight through. Large ones ask your phone to confirm once
                   more.
                 </p>
 
@@ -138,7 +209,7 @@ function Transfer() {
                       className="tnum h-14 rounded-2xl text-2xl font-bold"
                     />
                     <p className="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-muted-foreground">
-                      {needsStepUp ? "Passkey check required" : "Instant · no extra step"}
+                      {needsStepUp ? "One-time code required" : "Instant · no extra step"}
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -168,24 +239,6 @@ function Transfer() {
             </Reveal>
           )}
         </div>
-
-        <PasskeyPrompt
-          open={Boolean(stepUp)}
-          onOpenChange={(v) => {
-            if (!v && phase !== "waiting") setStepUp(null);
-          }}
-          title="Verify this transfer"
-          description="This one is above your instant limit, so your device signs it before the money moves."
-          cta="Verify with Face ID / Touch ID"
-          phase={phase}
-          onVerify={verifyStepUp}
-          detail={
-            <div className="hairline-y">
-              <MetaLine label="Amount" value={formatINR(amountMinor)} />
-              <MetaLine label="To" value={recipient} />
-            </div>
-          }
-        />
 
         <Footer />
       </PageShell>

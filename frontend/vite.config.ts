@@ -12,4 +12,11 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    server: {
+      // Pinned so WEBAUTHN_ORIGIN on the backend (http://localhost:5173) always matches.
+      port: 5173,
+      strictPort: true,
+    },
+  },
 });

@@ -15,7 +15,7 @@ import {
   MonitorSmartphone,
 } from "lucide-react";
 import type { ActivityEvent, Transaction } from "@/lib/api";
-import { formatINR } from "@/lib/mockData";
+import { formatINR } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { RiskBadge } from "./primitives";
 

@@ -1,303 +1,725 @@
 /**
- * NovaBank API layer.
- *
- * Every function here is the ONLY place network access should live. Today each
- * one short-circuits to fixtures in ./mockData with a realistic latency, and
- * carries the exact intended request/response shape in a TODO so wiring a real
- * backend is a find-and-replace job — component code never changes.
+ * NovaBank API layer — the ONLY place network access lives.
+ * Talks to the Express backend on VITE_API_BASE_URL (default "/api"),
+ * attaches the access token, auto-refreshes once on 401, and maps backend
+ * responses into the UI's domain shapes.
  */
 
-import {
-  mockAccount,
-  mockActivity,
-  mockNotificationPrefs,
-  mockPasskeys,
-  mockRecoveryCodes,
-  mockTransactions,
-  mockUser,
-  STEP_UP_THRESHOLD_MINOR,
-  type AccountSummary,
-  type ActivityEvent,
-  type Passkey,
-  type RiskAction,
-  type RiskLevel,
-  type Transaction,
-  type UserProfile,
-} from "./mockData";
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+} from "@simplewebauthn/types";
+
+import { getStoredSession, saveSession, clearSession } from "./session";
 
 export const BASE_URL = import.meta.env["VITE_API_BASE_URL"] ?? "/api";
 
-const latency = (min = 320, max = 780) =>
-  new Promise<void>((r) => setTimeout(r, min + Math.random() * (max - min)));
+/* ── Shared domain types (kept source-compatible with the previous layer) ─ */
+
+export type RiskLevel = "low" | "medium" | "high";
+export type RiskAction = "allow" | "step_up" | "block";
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phoneMasked: string;
+  avatarUrl: string | null;
+  memberSince: string;
+}
+
+export interface AccountSummary {
+  accountId: string;
+  nickname: string;
+  maskedNumber: string;
+  balanceMinor: number;
+  currency: "INR";
+  availableMinor: number;
+  monthChangeMinor: number;
+}
+
+export interface Transaction {
+  id: string;
+  merchant: string;
+  category:
+    | "salary"
+    | "transfer"
+    | "food"
+    | "transport"
+    | "shopping"
+    | "utilities"
+    | "subscription"
+    | "refund";
+  date: string;
+  amountMinor: number;
+  status: "settled" | "pending" | "declined";
+  method: string;
+}
+
+export interface ActivityEvent {
+  id: string;
+  type: "login" | "transfer" | "alert" | "passkey";
+  timestamp: string;
+  device: string;
+  city: string;
+  country: string;
+  ipMasked: string;
+  risk: RiskLevel;
+  signal: string;
+  sessionActive: boolean;
+  /** Present on login events whose session can still be revoked. */
+  sessionId?: string;
+}
+
+export interface Passkey {
+  id: string;
+  deviceName: string;
+  platform: string;
+  addedAt: string;
+  lastUsedAt: string;
+  synced: boolean;
+}
 
 export interface Session {
-  token: string;
-  userId: string;
-  issuedAt: string;
-  expiresAt: string;
+  accessToken: string;
+  refreshToken: string;
+  name: string;
+  email: string;
 }
 
 export interface LoginResult {
-  session: Session | null;
+  stepUpRequired: boolean;
+  method?: "otp_email" | "passkey";
   riskScore: number;
   riskLevel: RiskLevel;
   riskAction: RiskAction;
   reason: string;
+  session?: Session;
+  devOtp?: string;
+  options?: PublicKeyCredentialRequestOptionsJSON;
 }
 
-const session = (): Session => ({
-  token: "mock_sess_" + Math.random().toString(36).slice(2, 10),
-  userId: mockUser.id,
-  issuedAt: new Date().toISOString(),
-  expiresAt: new Date(Date.now() + 36e5).toISOString(),
-});
-
-/* ── Auth ───────────────────────────────────────────────────────────────── */
-
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/register/options`
-// POST { name, email } → { challenge, rp, user, pubKeyCredParams, timeout }
-export async function postRegisterOptions(input: { name: string; email: string }) {
-  await latency();
-  return {
-    challenge: btoa("nova-reg-challenge"),
-    rp: { name: "NovaBank", id: "novabank.app" },
-    user: { id: "usr_pending", name: input.email, displayName: input.name },
-    pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-    timeout: 60000,
-  };
+export interface TransferResult {
+  status: "completed" | "pending_step_up";
+  requiresStepUp: boolean;
+  intentId: string;
+  reference: string;
+  devOtp?: string;
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/register/verify`
-// POST { credential: PublicKeyCredential } → { session, user }
-export async function postRegisterVerify(_input: { credentialId: string }) {
-  await latency(700, 1200);
-  return { session: session(), user: mockUser };
+export const STEP_UP_THRESHOLD_MINOR = 1_000_000; // ₹10,000 → step-up OTP
+
+export function formatINR(minor: number, opts?: { signed?: boolean }) {
+  const value = Math.abs(minor) / 100;
+  const formatted = value.toLocaleString("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+  });
+  if (!opts?.signed) return formatted;
+  return `${minor < 0 ? "−" : "+"}${formatted}`;
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/login/options`
-// POST { email? } → { challenge, allowCredentials[], userVerification }
-export async function postLoginOptions(_input?: { email?: string }) {
-  await latency();
-  return {
-    challenge: btoa("nova-auth-challenge"),
-    allowCredentials: mockPasskeys.map((p) => ({ id: p.id, type: "public-key" })),
-    userVerification: "required" as const,
-  };
+const notificationPrefs = [
+  {
+    id: "new_device",
+    label: "Email me when a new device signs in",
+    hint: "Sent within seconds of the session starting",
+    enabled: true,
+  },
+  {
+    id: "large_transfer",
+    label: "Email me for transfers above ₹10,000",
+    hint: "Receipt plus the device that approved it",
+    enabled: true,
+  },
+  {
+    id: "blocked",
+    label: "Email me when we block a sign-in",
+    hint: "Includes the signal that triggered the block",
+    enabled: true,
+  },
+  {
+    id: "product",
+    label: "Product updates from NovaBank",
+    hint: "Roughly once a month. No marketing blasts.",
+    enabled: false,
+  },
+];
+
+/* ── Request plumbing with token refresh ───────────────────────────────── */
+
+async function rawFetch(path: string, init: RequestInit = {}) {
+  const session = getStoredSession();
+  const headers = new Headers(init.headers);
+  if (init.body != null && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (session?.accessToken) headers.set("Authorization", `Bearer ${session.accessToken}`);
+  return fetch(`${BASE_URL}${path}`, { ...init, headers });
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/login/verify`
-// POST { assertion } → { session, riskScore, riskLevel, riskAction, reason }
-export async function postLoginVerify(input?: { simulateRisk?: RiskLevel }): Promise<LoginResult> {
-  await latency(650, 1100);
-  const level = input?.simulateRisk ?? "low";
-  if (level === "medium")
+async function apiFetch<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  let res = await rawFetch(path, init);
+
+  if (res.status === 401 && retry) {
+    const session = getStoredSession();
+    if (session?.refreshToken) {
+      try {
+        const data = (await fetch(`${BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: session.refreshToken }),
+        }).then((r) => r.json())) as { accessToken?: string; refreshToken?: string };
+        if (data.accessToken) {
+          saveSession({
+            ...session,
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken ?? session.refreshToken,
+          });
+          res = await rawFetch(path, init);
+        }
+      } catch {
+        /* refresh failed — fall through to the 401 handling below */
+      }
+      if (res.status === 401) clearSession();
+    } else {
+      clearSession();
+    }
+  }
+
+  if (res.status === 204) return undefined as T;
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+
+  if (!res.ok) {
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+  return body as T;
+}
+
+function authHeaders(): Record<string, string> {
+  const session = getStoredSession();
+  return session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {};
+}
+
+/* ── Auth ──────────────────────────────────────────────────────────────── */
+
+export async function postRegisterOptions(input: {
+  name: string;
+  email: string;
+}): Promise<PublicKeyCredentialCreationOptionsJSON> {
+  const res = await apiFetch<{ options: PublicKeyCredentialCreationOptionsJSON }>("/auth/register/options", {
+    method: "POST",
+    body: JSON.stringify({ name: input.name, email: input.email }),
+  });
+  return res.options;
+}
+
+export async function postRegisterVerify(input: {
+  name: string;
+  email: string;
+  credential: RegistrationResponseJSON;
+}) {
+  const res = await apiFetch<{
+    user: { id: string; email: string; name: string };
+    accessToken: string;
+    refreshToken: string;
+    recoveryCodes: string[];
+  }>("/auth/register/verify", {
+    method: "POST",
+    body: JSON.stringify({ name: input.name, email: input.email, credential: input.credential }),
+  });
+  saveSession({
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+  });
+  return { user: res.user, recoveryCodes: res.recoveryCodes };
+}
+
+export async function postLoginOptions(input: { email: string }) {
+  const res = await apiFetch<{ options: PublicKeyCredentialRequestOptionsJSON; email: string }>("/auth/login/options", {
+    method: "POST",
+    body: JSON.stringify({ email: input.email }),
+  });
+  return res;
+}
+
+export async function postLoginVerify(input: {
+  email: string;
+  credential: AuthenticationResponseJSON;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+  deviceFingerprint: string;
+  deviceInfo: string;
+}): Promise<LoginResult> {
+  const res = await apiFetch<{
+    stepUpRequired: boolean;
+    method?: "otp_email" | "passkey";
+    riskScore: number;
+    riskAction: string;
+    reason?: string;
+    devOtp?: string;
+    options?: PublicKeyCredentialRequestOptionsJSON;
+    accessToken?: string;
+    refreshToken?: string;
+    user?: { name: string; email: string };
+  }>("/auth/login/verify", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  const riskLevel: RiskLevel = res.riskScore > 60 ? "high" : res.riskScore > 30 ? "medium" : "low";
+  const riskAction: RiskAction =
+    res.riskAction === "block" ? "block" : res.riskAction === "allow" ? "allow" : "step_up";
+  const reason = res.reason ?? defaultReason(res.riskScore, res.riskAction);
+
+  if (res.stepUpRequired) {
     return {
-      session: null,
-      riskScore: 54,
-      riskLevel: "medium",
-      riskAction: "step_up",
-      reason: "New device on a network we've seen before.",
+      stepUpRequired: true,
+      ...(res.method ? { method: res.method } : {}),
+      riskScore: res.riskScore,
+      riskLevel,
+      riskAction,
+      reason,
+      ...(res.devOtp ? { devOtp: res.devOtp } : {}),
+      ...(res.options ? { options: res.options } : {}),
     };
-  if (level === "high")
+  }
+
+  if (res.accessToken && res.refreshToken && res.user) {
+    saveSession({
+      accessToken: res.accessToken,
+      refreshToken: res.refreshToken,
+      name: res.user.name,
+      email: res.user.email,
+    });
     return {
-      session: null,
-      riskScore: 92,
-      riskLevel: "high",
-      riskAction: "block",
-      reason:
-        "Sign-in came from Lagos, Nigeria 40 minutes after activity in Pune, on a device fingerprint that looks emulated.",
+      stepUpRequired: false,
+      riskScore: res.riskScore,
+      riskLevel,
+      riskAction,
+      reason,
+      session: { accessToken: res.accessToken, refreshToken: res.refreshToken, name: res.user.name, email: res.user.email },
     };
-  return {
-    session: session(),
-    riskScore: 8,
-    riskLevel: "low",
-    riskAction: "allow",
-    reason: "Known device, usual location, typical hour.",
-  };
+  }
+
+  return { stepUpRequired: false, riskScore: res.riskScore, riskLevel, riskAction, reason };
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/login/otp/verify`
-// POST { code, pollToken } → { session }
-export async function postOtpVerify(input: { code: string }) {
-  await latency(500, 900);
-  if (input.code.replace(/\D/g, "").length < 6)
-    throw new Error("Enter the 6-digit code we emailed you.");
-  return { session: session() };
+function defaultReason(score: number, action: string): string {
+  if (action === "block") return "Our risk engine stopped this sign-in. If this was you, contact support.";
+  if (action === "step_up_email") return `Unusual sign-in detected (score ${score}). We emailed you a one-time code.`;
+  if (action === "step_up_passkey") return `Unusual sign-in detected (score ${score}). Confirm once more with your passkey.`;
+  return "Known device, usual location, typical hour.";
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/login/qr/create`
-// POST {} → { pollToken, payloadUrl, expiresAt }
+export async function postStepUpVerify(input: {
+  method: "otp_email" | "passkey" | "recovery_code";
+  email: string;
+  otp?: string;
+  code?: string;
+  credential?: AuthenticationResponseJSON;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+  deviceFingerprint: string;
+  deviceInfo: string;
+}) {
+  const res = await apiFetch<{
+    verified: boolean;
+    accessToken: string;
+    refreshToken: string;
+    user: { name: string; email: string };
+  }>("/auth/step-up/verify", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  saveSession({
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+  });
+  return { verified: res.verified, session: res };
+}
+
+/* ── QR cross-device login ─────────────────────────────────────────────── */
+
 export async function postQrCreate() {
-  await latency(250, 500);
-  const token = "qr_" + Math.random().toString(36).slice(2, 12);
+  const res = await apiFetch<{ token: string; expiresAt: string; qrImage: string }>("/auth/login/qr/create", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return { token: res.token, expiresAt: res.expiresAt, qrImage: res.qrImage };
+}
+
+export async function getQrStatus(token: string) {
+  return apiFetch<{
+    status: "pending" | "approved" | "denied" | "expired";
+    expiresAt: string;
+    grantToken: string | null;
+    deviceInfo: string | null;
+    location: string | null;
+  }>(`/auth/login/qr/status/${encodeURIComponent(token)}`);
+}
+
+export async function postQrApprove(input: { token: string; decision: "approve" | "deny"; deviceInfo: string }) {
+  return apiFetch<{ status: string }>("/auth/login/qr/approve", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postQrExchange(input: {
+  grantToken: string;
+  deviceFingerprint: string;
+  deviceInfo: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}) {
+  const res = await apiFetch<{
+    accessToken: string;
+    refreshToken: string;
+    user: { name: string; email: string };
+  }>("/auth/login/qr/exchange", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  saveSession({
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+  });
+  return res;
+}
+
+/* ── Account ───────────────────────────────────────────────────────────── */
+
+export async function getAccountSummary(): Promise<AccountSummary> {
+  const res = await apiFetch<{
+    balance: string;
+    currency: string;
+    stats: { totalTransactions: number; totalSpent: string };
+  }>("/account/summary", { headers: authHeaders() });
+
   return {
-    pollToken: token,
-    payloadUrl: `https://novabank.app/login/approve?t=${token}`,
-    expiresAt: new Date(Date.now() + 12e4).toISOString(),
+    accountId: "acc_4471",
+    nickname: "Everyday",
+    maskedNumber: "•••• 4471",
+    balanceMinor: Math.round(Number(res.balance) * 100),
+    currency: "INR",
+    availableMinor: Math.round(Number(res.balance) * 100),
+    monthChangeMinor: 0,
   };
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/login/qr/status/${token}`
-// GET → { status: 'pending' | 'approved' | 'denied' | 'expired', session? }
-export async function getQrStatus(token: string, attempt: number) {
-  await latency(200, 400);
-  if (attempt >= 6) return { status: "approved" as const, token, session: session() };
-  return { status: "pending" as const, token, session: null };
+export async function getTransactions(): Promise<{ items: Transaction[]; nextCursor: string | null }> {
+  const res = await apiFetch<{
+    transactions: {
+      id: string;
+      recipient: string;
+      amount: string;
+      note: string | null;
+      status: string;
+      createdAt: string;
+    }[];
+    total: number;
+  }>("/account/transactions", { headers: authHeaders() });
+
+  return {
+    items: res.transactions.map((t) => ({
+      id: t.id,
+      merchant: t.recipient,
+      category: "transfer" as const,
+      date: t.createdAt,
+      amountMinor: -Math.round(Number(t.amount) * 100),
+      status: t.status === "pending" ? "pending" : "settled",
+      method: "UPI · passkey verified",
+    })),
+    nextCursor: null,
+  };
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/login/qr/approve`
-// POST { pollToken, assertion } → { status: 'approved' }
-export async function postQrApprove(_input: { pollToken: string }) {
-  await latency(700, 1100);
-  return { status: "approved" as const };
-}
-
-// TODO: replace mock with real fetch to `${BASE_URL}/auth/step-up/verify`
-// POST { intentId, assertion } → { verified: true }
-export async function postStepUpVerify(_input: { intentId: string }) {
-  await latency(800, 1300);
-  return { verified: true as const };
-}
-
-/* ── Account ────────────────────────────────────────────────────────────── */
-
-// TODO: replace mock with real fetch to `${BASE_URL}/account/summary`
-// GET → AccountSummary
-export async function getAccountSummary(): Promise<AccountSummary> {
-  await latency();
-  return mockAccount;
-}
-
-// TODO: replace mock with real fetch to `${BASE_URL}/account/transactions?cursor=&limit=`
-// GET → { items: Transaction[], nextCursor: string | null }
-export async function getTransactions(): Promise<{
-  items: Transaction[];
-  nextCursor: string | null;
-}> {
-  await latency(420, 900);
-  return { items: mockTransactions, nextCursor: null };
-}
-
-// TODO: replace mock with real fetch to `${BASE_URL}/account/transfer`
-// POST { recipient, amountMinor, note } → { status, requiresStepUp, intentId, reference }
 export async function postTransfer(input: {
   recipient: string;
   amountMinor: number;
   note?: string;
-}) {
-  await latency(450, 850);
-  const requiresStepUp = input.amountMinor >= STEP_UP_THRESHOLD_MINOR;
+}): Promise<TransferResult> {
+  const res = await apiFetch<{
+    executed: boolean;
+    stepUpRequired?: boolean;
+    transferToken?: string;
+    devOtp?: string;
+    transaction?: { id: string };
+  }>("/account/transfer", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      recipient: input.recipient,
+      amount: Math.round(input.amountMinor) / 100,
+      note: input.note,
+    }),
+  });
+
+  if (res.executed) {
+    return {
+      status: "completed",
+      requiresStepUp: false,
+      intentId: res.transaction?.id ?? "",
+      reference: `NB${Math.floor(Math.random() * 9e7 + 1e7)}`,
+    };
+  }
+
   return {
-    status: requiresStepUp ? ("pending_step_up" as const) : ("completed" as const),
-    requiresStepUp,
-    intentId: "int_" + Math.random().toString(36).slice(2, 10),
-    reference: "NB" + Math.floor(Math.random() * 9e7 + 1e7),
-    completedAt: new Date().toISOString(),
+    status: "pending_step_up",
+    requiresStepUp: true,
+    intentId: res.transferToken ?? "",
+    reference: `NB${Math.floor(Math.random() * 9e7 + 1e7)}`,
+    ...(res.devOtp ? { devOtp: res.devOtp } : {}),
   };
 }
 
-/* ── Security ───────────────────────────────────────────────────────────── */
+export async function postTransferConfirm(input: { transferToken: string; otp: string }) {
+  const res = await apiFetch<{
+    executed: boolean;
+    transaction: {
+      id: string;
+      recipient: string;
+      amount: string;
+      status: string;
+      createdAt: string;
+    };
+  }>("/account/transfer/confirm", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+  return { executed: res.executed, transaction: res.transaction };
+}
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/activity`
-// GET → ActivityEvent[]
+/* ── Security ──────────────────────────────────────────────────────────── */
+
 export async function getActivity(): Promise<ActivityEvent[]> {
-  await latency(420, 900);
-  return mockActivity;
+  const res = await apiFetch<{
+    events: {
+      id: string;
+      type: string;
+      title: string;
+      detail: string;
+      device: string;
+      location: string | null;
+      riskScore: number;
+      riskAction: string;
+      timestamp: string;
+    }[];
+    total: number;
+  }>("/security/activity", { headers: authHeaders() });
+
+  return res.events.map((e) => {
+    let detail = e.detail;
+    let sessionId: string | undefined;
+    try {
+      const parsed = JSON.parse(e.detail);
+      if (parsed && typeof parsed === "object") {
+        detail = parsed.signal ?? parsed.sessionId ?? "";
+        sessionId = parsed.sessionId ?? undefined;
+      }
+    } catch {
+      /* detail is a plain string */
+    }
+
+    const [city = "Unknown", country = "Unknown"] = (e.location ?? "Unknown, Unknown").split(", ");
+    const isLogin = e.type === "login";
+    return {
+      id: e.id,
+      type: (e.type === "transaction" ? "transfer" : e.type) as ActivityEvent["type"],
+      timestamp: e.timestamp,
+      device: e.device,
+      city,
+      country,
+      ipMasked: maskIp(),
+      risk: e.riskScore > 60 ? "high" : e.riskScore > 30 ? "medium" : "low",
+      signal: detail || e.title,
+      sessionActive: isLogin && e.riskAction === "allow",
+      ...(sessionId ? { sessionId } : {}),
+    };
+  });
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/activity/${id}/revoke`
-// POST → { revoked: true }
-export async function postRevokeSession(id: string) {
-  await latency(400, 700);
-  return { revoked: true as const, id };
+function maskIp(): string {
+  return "•".repeat(8);
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/sessions/revoke-all`
-// POST → { revoked: number }
+export async function postRevokeSession(sessionId: string) {
+  return apiFetch<{ revoked: boolean; id: string }>(`/security/sessions/${sessionId}/revoke`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+}
+
 export async function postRevokeAllSessions() {
-  await latency(600, 1000);
-  return { revoked: mockActivity.filter((e) => e.sessionActive).length };
+  return apiFetch<{ revoked: number }>("/security/sessions/revoke-all", {
+    method: "POST",
+    headers: authHeaders(),
+  });
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/passkeys`
-// GET → Passkey[]
 export async function getPasskeys(): Promise<Passkey[]> {
-  await latency();
-  return mockPasskeys;
+  const res = await apiFetch<{
+    passkeys: {
+      id: string;
+      credentialId: string;
+      nickname: string;
+      deviceType: string;
+      backedUp: boolean;
+      createdAt: string;
+      lastUsedAt: string;
+    }[];
+  }>("/security/passkeys", { headers: authHeaders() });
+
+  return res.passkeys.map((p) => ({
+    id: p.id,
+    deviceName: p.nickname,
+    platform: p.deviceType === "platform" ? "This device" : "Hardware key",
+    addedAt: p.createdAt,
+    lastUsedAt: p.lastUsedAt,
+    synced: p.backedUp,
+  }));
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/passkeys`
-// POST { credential } → Passkey
-export async function postPasskey(input: { deviceName: string }): Promise<Passkey> {
-  await latency(800, 1200);
-  return {
-    id: "pk_" + Math.random().toString(36).slice(2, 8),
-    deviceName: input.deviceName,
-    platform: "This device",
-    addedAt: new Date().toISOString(),
-    lastUsedAt: new Date().toISOString(),
-    synced: true,
-  };
+export async function postPasskey(): Promise<Passkey> {
+  const { startRegistration } = await import("@simplewebauthn/browser");
+  const optsRes = await apiFetch<{ options: PublicKeyCredentialCreationOptionsJSON }>(
+    "/security/passkeys/register/options",
+    { method: "POST", headers: authHeaders() },
+  );
+  const credential = await startRegistration({ optionsJSON: optsRes.options });
+  await apiFetch<{ ok: boolean }>("/security/passkeys/register/verify", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ credential }),
+  });
+  const list = await getPasskeys();
+  const created = list.find((p) => p.id !== list[0]?.id) ?? list[0];
+  if (!created) throw new Error("Passkey was created but could not be found.");
+  return created;
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/passkeys/${id}` (PATCH)
-// PATCH { deviceName } → Passkey
-export async function patchPasskey(input: { id: string; deviceName: string }) {
-  await latency(300, 600);
-  return input;
-}
-
-// TODO: replace mock with real fetch to `${BASE_URL}/security/passkeys/${id}` (DELETE)
-// DELETE → { revoked: true }
 export async function deletePasskey(id: string) {
-  await latency(400, 700);
-  return { revoked: true as const, id };
+  return apiFetch<{ ok: boolean }>(`/security/passkeys/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/recovery-codes`
-// GET → { remaining, total, lastGeneratedAt, codes? }
 export async function getRecoveryCodes() {
-  await latency();
-  return mockRecoveryCodes;
-}
+  const res = await apiFetch<{
+    total: number;
+    remaining: number;
+    used: number;
+    lastGeneratedAt: string | null;
+  }>("/security/recovery-codes", { headers: authHeaders() });
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/recovery-codes/regenerate`
-// POST → { remaining, codes }
-export async function postRegenerateRecoveryCodes() {
-  await latency(700, 1100);
   return {
-    ...mockRecoveryCodes,
-    lastGeneratedAt: new Date().toISOString(),
-    codes: mockRecoveryCodes.codes.map(
-      () =>
-        Math.random().toString(36).slice(2, 6).toUpperCase() +
-        "-" +
-        Math.random().toString(36).slice(2, 6).toUpperCase(),
-    ),
+    remaining: res.remaining,
+    total: res.total,
+    lastGeneratedAt: res.lastGeneratedAt ?? "",
+    codes: [] as string[], // plaintext codes are only shown right after generation
   };
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/security/notifications`
-// GET → NotificationPref[]
+export async function postRegenerateRecoveryCodes() {
+  const res = await apiFetch<{ recoveryCodes: string[] }>("/security/recovery-codes/rotate", {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  return { remaining: res.recoveryCodes.length, total: res.recoveryCodes.length, codes: res.recoveryCodes };
+}
+
 export async function getNotificationPrefs() {
-  await latency(250, 500);
-  return mockNotificationPrefs;
+  return notificationPrefs;
 }
 
-/* ── User ───────────────────────────────────────────────────────────────── */
+export async function getDevices() {
+  const res = await apiFetch<{
+    devices: {
+      id: string;
+      deviceInfo: string;
+      ipAddress: string;
+      location: string | null;
+      lastSeen: string;
+      createdAt: string;
+    }[];
+  }>("/security/devices", { headers: authHeaders() });
+  return res.devices;
+}
 
-// TODO: replace mock with real fetch to `${BASE_URL}/user/profile`
-// GET → UserProfile
+export async function revokeDevice(id: string) {
+  return apiFetch<{ ok: boolean }>(`/security/devices/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+
+/* ── User ──────────────────────────────────────────────────────────────── */
+
 export async function getProfile(): Promise<UserProfile> {
-  await latency();
-  return mockUser;
+  const res = await apiFetch<{
+    user: { id: string; email: string; name: string; balance: string; createdAt: string };
+  }>("/user/profile", { headers: authHeaders() });
+
+  return {
+    id: res.user.id,
+    name: res.user.name,
+    email: res.user.email,
+    phoneMasked: "+91 ••••• ••••",
+    avatarUrl: null,
+    memberSince: res.user.createdAt,
+  };
 }
 
-// TODO: replace mock with real fetch to `${BASE_URL}/user/profile`
-// PATCH { name, email, phone } → UserProfile
 export async function patchProfile(input: Partial<UserProfile>): Promise<UserProfile> {
-  await latency(450, 800);
-  return { ...mockUser, ...input };
+  const res = await apiFetch<{
+    user: { id: string; email: string; name: string };
+  }>("/user/profile", {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ name: input.name }),
+  });
+  const current = getStoredSession();
+  if (current?.email === res.user.email) {
+    saveSession({ ...current, name: res.user.name });
+  }
+  return { ...(await getProfile()) };
 }
 
-export type { AccountSummary, ActivityEvent, Passkey, Transaction, UserProfile };
+/* ── Session helpers for the UI ────────────────────────────────────────── */
+
+export async function postLogout() {
+  const session = getStoredSession();
+  if (session?.refreshToken) {
+    try {
+      await fetch(`${BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: session.refreshToken }),
+      });
+    } catch {
+      /* best effort */
+    }
+  }
+  clearSession();
+}
+
+export type { AuthenticationResponseJSON, RegistrationResponseJSON };
