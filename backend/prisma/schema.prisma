@@ -11,21 +11,24 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  balance      Decimal  @default(100000) @db.Decimal(12, 2)
-  passwordHash String? // argon2id, set only if the user opts into the password fallback
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String
+  balance       Decimal  @default(500000) @db.Decimal(12, 2)
+  passwordHash  String? // argon2id, set only if the user opts into the password fallback
+  emailVerified Boolean  @default(false) // gate: passkeys can only be registered after email verification
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  credentials      Credential[]
-  trustedDevices   TrustedDevice[]
-  sessions         Session[]
-  loginHistory     LoginHistory[]
-  transactions     Transaction[]
-  keystrokeProfile KeystrokeProfile?
-  recoveryCodes    RecoveryCode[]
+  credentials            Credential[]
+  trustedDevices         TrustedDevice[]
+  sessions               Session[]
+  loginHistory           LoginHistory[]
+  transactions           Transaction[]
+  keystrokeProfile       KeystrokeProfile?
+  recoveryCodes          RecoveryCode[]
+  emailVerificationToken EmailVerificationToken?
+  imageChallengeSetups   ImageChallengeSetup[]
 }
 
 model Credential {
@@ -79,7 +82,7 @@ model LoginHistory {
   ipAddress  String
   location   String?
   riskScore  Int      @default(0)
-  riskAction String // "allow", "step_up_email", "step_up_passkey", "block"
+  riskAction String // "allow", "step_up", "image_challenge", "block"
   details    String? // JSON string for extra context
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -135,4 +138,26 @@ model QrSession {
   location   String?
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+}
+
+/** Email verification tokens — one per user, single-use, hashed, 15-min TTL. */
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/** Audit trail for image-sequence step-up challenges (click-in-region). */
+model ImageChallengeSetup {
+  id        String    @id @default(uuid())
+  userId    String?
+  sequence  String // JSON: [{ imageKey, regionId }]
+  attempts  Int       @default(0)
+  verified  Boolean   @default(false)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

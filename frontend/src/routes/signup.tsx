@@ -1,14 +1,29 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
-import { ArrowRight, Check, ChevronDown, Mail, ShieldCheck, User } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Loader2,
+  Mail,
+  MailCheck,
+  ShieldCheck,
+  User,
+} from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { postRegisterOptions, postRegisterVerify } from "@/lib/api";
+import {
+  postRegisterInitiate,
+  postRegisterOptions,
+  postRegisterStatus,
+  postRegisterVerify,
+} from "@/lib/api";
 import { useKeystrokeCapture } from "@/lib/keystroke";
+import { downloadRecoveryCodesPdf } from "@/lib/recoveryPdf";
 import { useSession } from "@/lib/session";
 import { toast } from "sonner";
 
@@ -31,38 +46,77 @@ export const Route = createFileRoute("/signup")({
   component: Signup,
 });
 
+type Step = 1 | 2 | 3 | 4;
+
 function Signup() {
   const navigate = useNavigate();
   const { session } = useSession();
-  const [step, setStep] = React.useState<1 | 2 | 3>(1);
+  const [step, setStep] = React.useState<Step>(1);
   const [name, setName] = React.useState("Rohan Patil");
   const [email, setEmail] = React.useState("rohan.patil@hey.com");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [error, setError] = React.useState<string | null>(null);
   const [why, setWhy] = React.useState(false);
   const [recoveryCodes, setRecoveryCodes] = React.useState<string[]>([]);
+  const [resending, setResending] = React.useState(false);
   const keys = useKeystrokeCapture();
 
   React.useEffect(() => {
-    if (session && step !== 3) navigate({ to: "/dashboard" });
+    if (session && step !== 4) navigate({ to: "/dashboard" });
   }, [session, navigate, step]);
 
-  async function goToPasskey(e: React.FormEvent) {
+  // Poll verification status while on the "check your inbox" step.
+  React.useEffect(() => {
+    if (step !== 2) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const status = await postRegisterStatus(email);
+        if (!cancelled && status.verified) {
+          setStep(3);
+          setError(null);
+          toast.success("Email verified", { description: "Now let's create your passkey." });
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    };
+    const timer = setInterval(check, 3000);
+    check();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [step, email]);
+
+  async function startSignup(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !email.includes("@")) {
       setError("Enter your full name and a valid email.");
       return;
     }
     setError(null);
+    setResending(true);
     try {
-      if (!browserSupportsWebAuthn()) {
-        setError("This browser doesn't support passkeys yet. Try Chrome, Edge or Safari.");
-        return;
-      }
-      await postRegisterOptions({ name, email });
+      await postRegisterInitiate({ name, email });
       setStep(2);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start registration.");
+      setError(err instanceof Error ? err.message : "Could not start signup.");
+    } finally {
+      setResending(false);
+    }
+  }
+
+  async function resendEmail() {
+    setError(null);
+    setResending(true);
+    try {
+      await postRegisterInitiate({ name, email });
+      toast.success("Email sent", { description: `A fresh link is on its way to ${email}.` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the email.");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -70,13 +124,18 @@ function Signup() {
     setPhase("waiting");
     setError(null);
     try {
+      if (!browserSupportsWebAuthn()) {
+        setError("This browser doesn't support passkeys yet. Try Chrome, Edge or Safari.");
+        setPhase("idle");
+        return;
+      }
       const options = await postRegisterOptions({ name, email });
       keys.getSamples();
       const credential = await startRegistration({ optionsJSON: options });
       const res = await postRegisterVerify({ name, email, credential });
       setPhase("success");
       setRecoveryCodes(res.recoveryCodes);
-      setStep(3);
+      setStep(4);
       toast.success("Passkey created", {
         description: `${name.split(" ")[0]}, your account is live.`,
       });
@@ -88,13 +147,15 @@ function Signup() {
     }
   }
 
+  const progressTotal = step === 4 ? 4 : 3;
+
   return (
     <NovaBackground>
       <PageShell className="min-h-[calc(100vh-4rem)]">
         <header className="flex items-center justify-between py-4">
           <Logo />
           <span className="eyebrow">
-            Step {step} of {step === 3 ? "3" : "2"}
+            Step {Math.min(step, 3)} of {progressTotal === 4 ? "4" : "3"}
           </span>
         </header>
 
@@ -103,7 +164,7 @@ function Signup() {
             <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 shadow-card sm:p-8">
               {/* progress hairline */}
               <div className="mb-7 flex gap-1.5">
-                {[1, 2, 3].map((s) => (
+                {[1, 2, 3, 4].map((s) => (
                   <span
                     key={s}
                     className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
@@ -114,12 +175,13 @@ function Signup() {
               </div>
 
               {step === 1 ? (
-                <form onSubmit={goToPasskey} className="space-y-5">
+                <form onSubmit={startSignup} className="space-y-5">
                   <div className="space-y-2">
                     <PillBadge icon={<ShieldCheck />}>No password required</PillBadge>
                     <h1 className="pt-2 text-2xl">Open your account</h1>
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      We only need a name and an email. Everything else is handled by your device.
+                      We only need a name and an email. We&apos;ll email you a link to prove the
+                      address is yours, then your device makes the passkey.
                     </p>
                   </div>
 
@@ -160,11 +222,57 @@ function Signup() {
                     </p>
                   ) : null}
 
-                  <Button type="submit" size="lg" className="w-full">
-                    Continue <ArrowRight className="size-4" />
+                  <Button type="submit" size="lg" className="w-full" disabled={resending}>
+                    {resending ? "Sending…" : "Continue"} <ArrowRight className="size-4" />
                   </Button>
                 </form>
               ) : step === 2 ? (
+                <div className="space-y-6 text-center">
+                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-warning/14 text-[oklch(0.58_0.13_70)]">
+                    <MailCheck className="size-7" />
+                  </span>
+                  <div className="space-y-2">
+                    <h1 className="text-2xl">Check your inbox</h1>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      We sent a verification link to{" "}
+                      <span className="font-medium text-ink">{email}</span>. It expires in 15
+                      minutes. Click it, then come back here — we&apos;ll carry on automatically.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Waiting for you to verify…
+                  </div>
+
+                  {error ? (
+                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      {error}
+                    </p>
+                  ) : null}
+
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full"
+                    disabled={resending}
+                    onClick={resendEmail}
+                  >
+                    {resending ? "Sending…" : "Re-send the email"}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep(1);
+                      setError(null);
+                    }}
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                  >
+                    ← Use a different email
+                  </button>
+                </div>
+              ) : step === 3 ? (
                 <div className="space-y-6 text-center">
                   <div className="flex justify-center">
                     <PasskeyGlyph phase={phase} />
@@ -197,13 +305,13 @@ function Signup() {
                   <button
                     type="button"
                     onClick={() => {
-                      setStep(1);
+                      setStep(2);
                       setError(null);
                       setPhase("idle");
                     }}
                     className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
                   >
-                    ← Back to details
+                    ← Back
                   </button>
 
                   {/* Why no password — expandable */}
@@ -243,6 +351,14 @@ function Signup() {
                       <span key={c}>{c}</span>
                     ))}
                   </div>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => downloadRecoveryCodesPdf(recoveryCodes, email)}
+                  >
+                    Download as PDF
+                  </Button>
                   <Button
                     size="lg"
                     className="w-full"

@@ -1,0 +1,15 @@
+{
+  "name": "novabank",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NovaBank passwordless banking demo — backend + frontend",
+  "scripts": {
+    "prepare": "husky",
+    "test": "npm --prefix backend run test",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck": "npm --prefix frontend run typecheck && npm --prefix backend run typecheck"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

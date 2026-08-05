@@ -21,6 +21,7 @@ import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TransferRouteImport } from './routes/transfer'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as LoginIndexRouteImport } from './routes/login.index'
 import { Route as LoginApproveRouteImport } from './routes/login.approve'
 import { Route as SettingsSecurityRouteImport } from './routes/settings.security'
@@ -85,6 +86,11 @@ const TransferRoute = TransferRouteImport.update({
   path: '/transfer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginIndexRoute = LoginIndexRouteImport.update({
   id: '/login/',
   path: '/login/',
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/transfer': typeof TransferRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/login/approve': typeof LoginApproveRoute
   '/settings/security': typeof SettingsSecurityRoute
   '/login/': typeof LoginIndexRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/transfer': typeof TransferRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/login/approve': typeof LoginApproveRoute
   '/settings/security': typeof SettingsSecurityRoute
   '/login': typeof LoginIndexRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/transfer': typeof TransferRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/login/approve': typeof LoginApproveRoute
   '/settings/security': typeof SettingsSecurityRoute
   '/login/': typeof LoginIndexRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/transfer'
+    | '/verify-email'
     | '/login/approve'
     | '/settings/security'
     | '/login/'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/transfer'
+    | '/verify-email'
     | '/login/approve'
     | '/settings/security'
     | '/login'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/transfer'
+    | '/verify-email'
     | '/login/approve'
     | '/settings/security'
     | '/login/'
@@ -220,6 +232,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
   TransferRoute: typeof TransferRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   LoginApproveRoute: typeof LoginApproveRoute
   SettingsSecurityRoute: typeof SettingsSecurityRoute
   LoginIndexRoute: typeof LoginIndexRoute
@@ -311,6 +324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TransferRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login/': {
       id: '/login/'
       path: '/login'
@@ -348,6 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
   TransferRoute: TransferRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   LoginApproveRoute: LoginApproveRoute,
   SettingsSecurityRoute: SettingsSecurityRoute,
   LoginIndexRoute: LoginIndexRoute,

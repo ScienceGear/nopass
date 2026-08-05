@@ -19,12 +19,14 @@ import {
   getQrStatus,
   verifyQrGrant,
 } from "../services/qrService.js";
+import { createImageChallenge, verifyImageChallenge } from "../services/imageChallengeService.js";
 import type { AuthenticatorTransportFuture, RegistrationResponseJSON } from "@simplewebauthn/types";
-import { evaluateRisk, isUsualHour } from "../services/riskEngine.js";
-import { anomalyScore, mergeSample, profileHasData, emptyProfile, type KeystrokeProfile } from "../services/keystrokeService.js";
-import { sendOtp, verifyOtp, sendAlertEmail } from "../services/emailService.js";
+import { evaluateRisk } from "../services/riskEngine.js";
+import { assessContext, type RiskContextInput } from "../services/riskContextService.js";
+import { mergeSample, emptyProfile, type KeystrokeProfile } from "../services/keystrokeService.js";
+import { sendOtp, verifyOtp, sendAlertEmail, sendVerificationEmail } from "../services/emailService.js";
 import { checkEmailBreach, checkPasswordBreach } from "../services/hibpService.js";
-import { findTrustedDevice, markDeviceTrusted } from "../services/deviceService.js";
+import { markDeviceTrusted } from "../services/deviceService.js";
 import { geoFromIp, formatLocation } from "../utils/geo.js";
 import {
   generateRecoveryCodes,
@@ -33,6 +35,7 @@ import {
   signRefreshToken,
   verifyPassword,
   verifyRefreshToken,
+  randomToken,
   verifyPassword as verifyRecoveryCode,
 } from "../utils/crypto.js";
 import { env, isProduction } from "../config/env.js";
@@ -43,70 +46,23 @@ import {
   passwordRemoveSchema,
   passwordSetSchema,
   qrApproveSchema,
-  qrCreateSchema,
-  refreshSchema,
+  registerInitiateSchema,
   registerOptionsSchema,
+  registerStatusSchema,
   registerVerifySchema,
+  refreshSchema,
   stepUpVerifySchema,
+  verifyEmailSchema,
+  imageChallengeSetupSchema,
 } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const VERIFY_TTL_MS = 15 * 60 * 1000;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-interface LoginContext {
-  email: string;
-  deviceFingerprint: string;
-  deviceInfo: string;
-  keystrokes?: { prev: number; curr: number; delta: number }[];
-}
-
-async function assessLogin(user: { id: string; email: string }, ctx: LoginContext, ip: string) {
-  const trusted = await findTrustedDevice(user.id, ctx.deviceFingerprint);
-
-  const geo = await geoFromIp(ip);
-  const location = formatLocation(geo);
-  const countryCode = geo?.countryCode ?? null;
-
-  // Country history from the last 90 days.
-  const history = await prisma.loginHistory.findMany({
-    where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
-    select: { ipAddress: true, location: true },
-    take: 50,
-  });
-  const knownCountries = new Set<string>();
-  for (const h of history) {
-    const code = h.location?.split(", ").pop();
-    if (code) knownCountries.add(code);
-  }
-  const countryChanged = countryCode !== null && history.length > 0 && !knownCountries.has(countryCode) && countryCode !== "LOCAL";
-
-  // Keystroke anomaly.
-  const profileRow = await prisma.keystrokeProfile.findUnique({ where: { userId: user.id } });
-  const profile: KeystrokeProfile = profileRow?.transitions ? (JSON.parse(profileRow.transitions) as KeystrokeProfile) : emptyProfile();
-  const sample = ctx.keystrokes && ctx.keystrokes.length > 0
-    ? { transitions: ctx.keystrokes.map((k) => [k.prev, k.curr] as [number, number]), timings: ctx.keystrokes.map((k) => k.delta) }
-    : null;
-  const keystrokeAnomaly = sample && profileHasData(profile) ? anomalyScore(profile, sample) : 0;
-
-  // Login velocity (last 10 minutes).
-  const velocityKey = `auth:velocity:${user.id}`;
-  const redis = getRedis();
-  const recentLogins = await redis.incr(velocityKey);
-  if (recentLogins === 1) await redis.expire(velocityKey, 600);
-
-  return {
-    isNewDevice: !trusted,
-    isNewIp: history.length > 0 && !history.some((h) => h.ipAddress === ip),
-    countryChanged,
-    keystrokeAnomaly,
-    recentLogins,
-    loginCountIsAnomalous: recentLogins > 3,
-    unusualHour: !isUsualHour(),
-    location,
-  };
-}
+type LoginContext = RiskContextInput;
 
 async function completeLogin(
   user: { id: string; email: string; name: string },
@@ -166,7 +122,12 @@ async function completeLogin(
       location,
       riskScore,
       riskAction,
-      details: JSON.stringify({ sessionId: session.id, keystrokes: ctx.keystrokes?.length ?? 0 }),
+      details: JSON.stringify({
+        sessionId: session.id,
+        keystrokes: ctx.keystrokes?.length ?? 0,
+        lat: geo?.lat ?? null,
+        lon: geo?.lon ?? null,
+      }),
     },
   });
 
@@ -174,46 +135,138 @@ async function completeLogin(
 }
 
 // ---------------------------------------------------------------------------
-// REGISTRATION
+// REGISTRATION (email-first, verification-gated)
 // ---------------------------------------------------------------------------
+
+export const registerInitiate: RequestHandler = asyncHandler(async (req, res) => {
+  const { email, name } = registerInitiateSchema.parse(req.body);
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (existing) {
+    if (existing.emailVerified) throw new AppError(409, "An account already exists with this email — log in instead.");
+    logger.info(`Resending verification email for pending signup ${normalizedEmail}`);
+  } else {
+    await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        name: name.trim(),
+        keystrokeProfile: { create: { transitions: "{}", sampleCount: 0 } },
+      },
+    });
+  }
+
+  const token = randomToken("ve", 18);
+  await prisma.emailVerificationToken.deleteMany({ where: { userId: existing?.id ?? "" } });
+  const pending = await prisma.user.findUniqueOrThrow({ where: { email: normalizedEmail } });
+  await prisma.emailVerificationToken.upsert({
+    where: { userId: pending.id },
+    create: { userId: pending.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
+    update: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
+  });
+
+  const verifyLink = `${env.WEBAUTHN_ORIGIN}/verify-email?token=${encodeURIComponent(token)}`;
+  await sendVerificationEmail(normalizedEmail, name.trim(), verifyLink);
+
+  res.status(existing ? 200 : 201).json({
+    ok: true,
+    email: normalizedEmail,
+    ...(isProduction ? {} : { devVerifyUrl: verifyLink }),
+  });
+});
+
+export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
+  const { token } = verifyEmailSchema.parse(req.body);
+  const record = await prisma.emailVerificationToken.findFirst({
+    where: { tokenHash: sha256(token) },
+    include: { user: true },
+  });
+
+  if (!record || record.expiresAt < new Date()) {
+    throw new AppError(410, "This verification link has expired or is invalid. Start signup again for a fresh one.");
+  }
+
+  if (!record.user.emailVerified) {
+    await prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } });
+    await prisma.loginHistory.create({
+      data: {
+        userId: record.userId,
+        eventType: "alert",
+        deviceInfo: "NovaBank Web",
+        ipAddress: req.ip ?? "unknown",
+        riskScore: 0,
+        riskAction: "allow",
+        details: JSON.stringify({ kind: "email_verified" }),
+      },
+    });
+    logger.info(`Email verified: ${record.user.email}`);
+  }
+
+  await prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } });
+  res.json({ ok: true, email: record.user.email });
+});
+
+export const registerStatus: RequestHandler = asyncHandler(async (req, res) => {
+  const { email } = registerStatusSchema.parse(req.body);
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  res.json({ email: email.trim().toLowerCase(), verified: user?.emailVerified ?? false, name: user?.name ?? "" });
+});
 
 export const registerOptions: RequestHandler = asyncHandler(async (req, res) => {
   const { email, name } = registerOptionsSchema.parse(req.body);
-  const options = await buildRegistrationOptions(email.trim().toLowerCase(), name.trim());
-  res.json({ options, email: email.trim().toLowerCase() });
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail }, include: { credentials: true } });
+  if (!user || !user.emailVerified) {
+    throw new AppError(403, "Verify your email first — we emailed you a link. Check your inbox.", { code: "EMAIL_UNVERIFIED" });
+  }
+  if (user.credentials.length > 0) throw new AppError(409, "Account already registered — try logging in.");
+
+  const options = await buildRegistrationOptions(normalizedEmail, name.trim());
+  res.json({ options, email: normalizedEmail });
 });
 
 export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
-  const { email, credential } = registerVerifySchema.parse(req.body);
-  const { name, credential: cred, deviceType, backedUp } = await verifyRegistrationResponseCredential(
-    email,
+  const { email, name, credential, deviceFingerprint, deviceInfo } = registerVerifySchema.parse(req.body);
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    include: { credentials: true },
+  });
+  if (!user) throw new AppError(404, "Start signup first — we need to verify your email.");
+  if (!user.emailVerified) throw new AppError(403, "Your email isn't verified yet.", { code: "EMAIL_UNVERIFIED" });
+  if (user.credentials.length > 0) throw new AppError(409, "This account already has a passkey — log in instead.");
+
+  const { name: verifiedName, credential: cred, deviceType, backedUp } = await verifyRegistrationResponseCredential(
+    normalizedEmail,
     credential as unknown as RegistrationResponseJSON,
   );
 
-  const breachCount = await checkEmailBreach(email);
+  const breachCount = await checkEmailBreach(normalizedEmail);
   if (breachCount !== null && breachCount > 0) {
-    // We still allow registration, but this surfaces during the profile review.
-    logger.warn(`New signup email has been in ${breachCount} breach(es)`, email);
+    logger.warn(`New signup email has been in ${breachCount} breach(es)`, normalizedEmail);
   }
 
-  const user = await prisma.user.create({
+  await prisma.credential.create({
     data: {
-      email,
-      name,
-      credentials: {
-        create: {
-          credentialId: cred.id,
-          publicKey: Buffer.from(cred.publicKey),
-          counter: cred.counter,
-          deviceType,
-          backedUp,
-          transports: cred.transports as string[],
-          nickname: "Primary Passkey",
-        },
-      },
-      keystrokeProfile: { create: { transitions: "{}", sampleCount: 0 } },
+      userId: user.id,
+      credentialId: cred.id,
+      publicKey: Buffer.from(cred.publicKey),
+      counter: cred.counter,
+      deviceType,
+      backedUp,
+      transports: cred.transports as string[],
+      nickname: "Primary Passkey",
     },
-    select: { id: true, email: true, name: true },
+  });
+
+  const geo = await geoFromIp(req.ip ?? "unknown");
+  const location = formatLocation(geo);
+  await markDeviceTrusted({
+    userId: user.id,
+    rawFingerprint: deviceFingerprint,
+    deviceInfo,
+    ipAddress: req.ip ?? "unknown",
+    location,
   });
 
   const { codes, hashes } = await generateRecoveryCodes(10);
@@ -228,7 +281,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
     data: {
       userId: user.id,
       refreshToken: sha256(refreshToken),
-      deviceInfo: "Registration",
+      deviceInfo,
       ipAddress: req.ip ?? "unknown",
       riskScore: 0,
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
@@ -239,17 +292,18 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
     data: {
       userId: user.id,
       eventType: "login",
-      deviceInfo: "Registration",
+      deviceInfo,
       ipAddress: req.ip ?? "unknown",
+      location,
       riskScore: 0,
       riskAction: "allow",
-      details: JSON.stringify({ kind: "registration" }),
+      details: JSON.stringify({ kind: "registration", lat: geo?.lat ?? null, lon: geo?.lon ?? null }),
     },
   });
 
-  logger.info(`New account registered: ${email}`);
+  logger.info(`New account registered: ${normalizedEmail}`);
   res.status(201).json({
-    user,
+    user: { id: user.id, email: user.email, name: verifiedName },
     accessToken,
     refreshToken,
     recoveryCodes: codes,
@@ -268,6 +322,7 @@ export const loginOptions: RequestHandler = asyncHandler(async (req, res) => {
     include: { credentials: true },
   });
   if (!user) throw new AppError(404, "No account found with this email. Sign up first.");
+  if (!user.emailVerified) throw new AppError(403, "Verify your email before signing in — we emailed you a link.", { code: "EMAIL_UNVERIFIED" });
 
   const credentials = buildUserCredentialsFromDb(user.credentials);
   if (credentials.length === 0) throw new AppError(403, "No passkeys registered for this account.");
@@ -311,9 +366,10 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
     deviceFingerprint: body.deviceFingerprint,
     deviceInfo: body.deviceInfo,
     keystrokes: body.keystrokes,
+    pasted: body.pasted,
   };
 
-  const input = await assessLogin(user, ctx, ip);
+  const input = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk(input);
 
   await prisma.loginHistory.create({
@@ -325,7 +381,7 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
       location: input.location,
       riskScore: assessment.score,
       riskAction: assessment.action,
-      details: JSON.stringify({ signals: assessment.signals }),
+      details: JSON.stringify({ signals: assessment.signals, lat: null, lon: null }),
     },
   });
 
@@ -334,11 +390,13 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
     throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
   }
 
-  if (assessment.action === "step_up_email") {
+  if (assessment.action === "step_up") {
+    const userCreds = buildUserCredentialsFromDb(user.credentials);
+    if (userCreds.length > 0) {
+      const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
+      return res.json({ stepUpRequired: true, method: "passkey", risk: assessment, options });
+    }
     const otp = await sendOtp(email, "login_step_up");
-    await prisma.loginHistory.create({
-      data: { userId: user.id, eventType: "alert", deviceInfo: body.deviceInfo, ipAddress: ip, location: input.location, riskScore: assessment.score, riskAction: "step_up_email" },
-    });
     return res.json({
       stepUpRequired: true,
       method: "otp_email",
@@ -347,15 +405,10 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
     });
   }
 
-  if (assessment.action === "step_up_passkey") {
-    const userCreds = buildUserCredentialsFromDb(user.credentials);
-    const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
-    return res.json({
-      stepUpRequired: true,
-      method: "passkey",
-      risk: assessment,
-      options,
-    });
+  if (assessment.action === "image_challenge") {
+    await sendAlertEmail(email, "NovaBank needs an extra check", `We noticed unusual activity from ${body.deviceInfo} (${ip}) and asked for an image verification. If this wasn't you, contact support.`);
+    const challenge = await createImageChallenge(user.id);
+    return res.json({ stepUpRequired: true, method: "image_challenge", risk: assessment, challenge });
   }
 
   const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, assessment.score, "allow", ip);
@@ -375,7 +428,7 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
   const body = passwordLoginSchema.parse(req.body);
   const email = body.email.trim().toLowerCase();
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email }, include: { credentials: true } });
   if (!user || !user.passwordHash) {
     // Same generic message for "no account" and "no password set" to avoid
     // account enumeration; the UI surfaces the fallback via /auth/login/options.
@@ -391,9 +444,10 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
     deviceFingerprint: body.deviceFingerprint,
     deviceInfo: body.deviceInfo,
     keystrokes: body.keystrokes,
+    pasted: body.pasted,
   };
 
-  const input = await assessLogin(user, ctx, ip);
+  const input = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk(input);
 
   await prisma.loginHistory.create({
@@ -405,7 +459,7 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
       location: input.location,
       riskScore: assessment.score,
       riskAction: assessment.action,
-      details: JSON.stringify({ signals: assessment.signals, method: "password" }),
+      details: JSON.stringify({ signals: assessment.signals, method: "password", lat: null, lon: null }),
     },
   });
 
@@ -414,7 +468,12 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
     throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
   }
 
-  if (assessment.action === "step_up_email") {
+  if (assessment.action === "step_up") {
+    const userCreds = buildUserCredentialsFromDb(user.credentials);
+    if (userCreds.length > 0) {
+      const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
+      return res.json({ stepUpRequired: true, method: "passkey", risk: assessment, options });
+    }
     const otp = await sendOtp(email, "login_step_up");
     return res.json({
       stepUpRequired: true,
@@ -424,16 +483,10 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
     });
   }
 
-  if (assessment.action === "step_up_passkey") {
-    const userWithCreds = await prisma.user.findUnique({ where: { email }, include: { credentials: true } });
-    const userCreds = buildUserCredentialsFromDb(userWithCreds?.credentials ?? []);
-    const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
-    return res.json({
-      stepUpRequired: true,
-      method: "passkey",
-      risk: assessment,
-      options,
-    });
+  if (assessment.action === "image_challenge") {
+    await sendAlertEmail(email, "NovaBank needs an extra check", `We noticed unusual activity from ${body.deviceInfo} (${ip}) and asked for an image verification. If this wasn't you, contact support.`);
+    const challenge = await createImageChallenge(user.id);
+    return res.json({ stepUpRequired: true, method: "image_challenge", risk: assessment, challenge });
   }
 
   const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, assessment.score, "allow", ip);
@@ -454,14 +507,12 @@ export const setPassword: RequestHandler = asyncHandler(async (req, res) => {
     if (!ok) throw new AppError(401, "Current password is incorrect.");
   }
 
+  // HIBP k-anonymity check. A breached password is *allowed* (users pick what
+  // they pick) but flagged so the UI can warn them to change it.
+  let breachWarning = false;
   if (env.HIBP_API_KEY) {
     const count = await checkPasswordBreach(password);
-    if (count !== null && count > 0) {
-      throw new AppError(
-        400,
-        "This password appears in known data breaches. Pick a different one.",
-      );
-    }
+    if (count !== null && count > 0) breachWarning = true;
   }
 
   const passwordHash = await hashPassword(password);
@@ -476,11 +527,11 @@ export const setPassword: RequestHandler = asyncHandler(async (req, res) => {
       location: null,
       riskScore: 0,
       riskAction: "allow",
-      details: JSON.stringify({ kind: "password_set" }),
+      details: JSON.stringify({ kind: "password_set", breached: breachWarning }),
     },
   });
 
-  res.json({ ok: true, hasPassword: true });
+  res.json({ ok: true, hasPassword: true, breachWarning });
 });
 
 /** Remove the password fallback (must confirm the current password first). */
@@ -510,6 +561,31 @@ export const removePassword: RequestHandler = asyncHandler(async (req, res) => {
   });
 
   res.json({ ok: true, hasPassword: false });
+});
+
+// ---------------------------------------------------------------------------
+// IMAGE-SEQUENCE STEP-UP (Phase 8)
+// ---------------------------------------------------------------------------
+
+/** Create a fresh image-sequence challenge (also used for retries after expiry). */
+export const setupImageChallenge: RequestHandler = asyncHandler(async (req, res) => {
+  const body = imageChallengeSetupSchema.parse(req.body ?? {});
+  let userId: string | null = req.userId ?? null;
+  if (!userId && body.email) {
+    const user = await prisma.user.findUnique({ where: { email: body.email.trim().toLowerCase() } });
+    userId = user?.id ?? null;
+  }
+  const challenge = await createImageChallenge(userId);
+  res.json(challenge);
+});
+
+export const verifyImageChallengeRoute: RequestHandler = asyncHandler(async (req, res) => {
+  const { challengeToken, clicks } = stepUpVerifySchema
+    .pick({ challengeToken: true, clicks: true })
+    .parse(req.body);
+  if (!challengeToken) throw new AppError(400, "Challenge token required.");
+  const result = await verifyImageChallenge(challengeToken, clicks ?? []);
+  res.json(result);
 });
 
 // ---------------------------------------------------------------------------
@@ -559,6 +635,22 @@ export const stepUpVerify: RequestHandler = asyncHandler(async (req, res) => {
     if (user.passwordHash) {
       ok = await verifyPassword(user.passwordHash, body.password ?? "");
     }
+  } else if (body.method === "image_challenge") {
+    if (!body.challengeToken || !body.clicks || body.clicks.length === 0) {
+      throw new AppError(400, "Challenge token and click sequence required.");
+    }
+    const { ok: matched, attemptsLeft } = await verifyImageChallenge(body.challengeToken, body.clicks);
+    if (!matched) {
+      throw new AppError(
+        attemptsLeft > 0
+          ? 401
+          : 403,
+        attemptsLeft > 0
+          ? `That wasn't right. ${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} left.`
+          : "Too many failed attempts. Start again with a fresh challenge.",
+      );
+    }
+    ok = true;
   }
 
   if (!ok) throw new AppError(401, "Step-up verification failed.");
@@ -667,6 +759,7 @@ export const me: RequestHandler = asyncHandler(async (req, res) => {
       name: user.name,
       createdAt: user.createdAt,
       hasPassword: user.passwordHash != null,
+      emailVerified: user.emailVerified,
     },
   });
 });

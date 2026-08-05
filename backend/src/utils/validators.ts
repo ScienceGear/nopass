@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+export const registerInitiateSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2).max(80),
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(20),
+});
+
+export const registerStatusSchema = z.object({
+  email: z.string().email(),
+});
+
 export const registerOptionsSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2).max(80),
@@ -16,6 +29,8 @@ export const registerVerifySchema = z.object({
     clientExtensionResults: z.record(z.any()).optional(),
     authenticatorAttachment: z.string().optional(),
   }),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
 });
 
 export const loginOptionsSchema = z.object({
@@ -42,6 +57,7 @@ export const passwordLoginSchema = z.object({
   keystrokes: keystrokeSampleSchema,
   deviceFingerprint: z.string().min(8).max(256),
   deviceInfo: z.string().min(1).max(512),
+  pasted: z.boolean().optional(),
 });
 
 export const passwordSetSchema = z.object({
@@ -65,6 +81,7 @@ export const loginVerifySchema = z.object({
   keystrokes: keystrokeSampleSchema,
   deviceFingerprint: z.string().min(8).max(256),
   deviceInfo: z.string().min(1).max(512),
+  pasted: z.boolean().optional(),
 });
 
 export const qrCreateSchema = z.object({
@@ -78,21 +95,33 @@ export const qrApproveSchema = z.object({
 });
 
 export const stepUpVerifySchema = z.object({
-  method: z.enum(["otp_email", "passkey", "recovery_code", "password"]),
+  method: z.enum(["otp_email", "passkey", "recovery_code", "password", "image_challenge"]),
   email: z.string().email(),
   otp: z.string().length(6).optional(),
   code: z.string().min(4).optional(),
   password: passwordSchema.optional(),
   credential: z.any().optional(),
+  challengeToken: z.string().min(8).optional(),
+  clicks: z
+    .array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }))
+    .max(6)
+    .optional(),
   deviceFingerprint: z.string().min(8).max(256),
   deviceInfo: z.string().min(1).max(512),
   keystrokes: keystrokeSampleSchema,
+});
+
+export const imageChallengeSetupSchema = z.object({
+  email: z.string().email().optional(),
 });
 
 export const transferSchema = z.object({
   recipient: z.string().min(3).max(120),
   amount: z.coerce.number().positive().max(10_000_000),
   note: z.string().max(200).optional(),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
 });
 
 export const refreshSchema = z.object({

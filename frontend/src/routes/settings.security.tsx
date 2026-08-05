@@ -21,6 +21,7 @@ import {
   postRemovePassword,
   postSetPassword,
 } from "@/lib/api";
+import { downloadRecoveryCodesPdf } from "@/lib/recoveryPdf";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings/security")({
@@ -233,12 +234,17 @@ function SecuritySettings() {
                       }
                       setPwBusy(true);
                       try {
-                        await postSetPassword({ password: pw });
+                        const res = await postSetPassword({ password: pw });
                         setPw("");
                         setPwConfirm("");
                         toast.success("Password set", {
                           description: "You can now sign in with it as a fallback.",
                         });
+                        if (res.breachWarning) {
+                          toast.warning("That password appeared in a known breach", {
+                            description: "We saved it, but pick a fresh one when you get a chance.",
+                          });
+                        }
                         profile.refetch();
                       } catch (err) {
                         toast.error(
@@ -343,7 +349,10 @@ function SecuritySettings() {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => toast.success("PDF downloaded")}
+                  disabled={codeList.length === 0}
+                  onClick={() =>
+                    downloadRecoveryCodesPdf(codeList, profile.data?.email ?? "NovaBank user")
+                  }
                 >
                   Download as PDF
                 </Button>

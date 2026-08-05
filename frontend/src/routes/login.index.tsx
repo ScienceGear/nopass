@@ -4,6 +4,7 @@ import { startAuthentication, browserSupportsWebAuthn } from "@simplewebauthn/br
 import { ArrowRight, Fingerprint, MailCheck, QrCode, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button, PillBadge, RiskBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
+import { ImageChallenge } from "@/components/nova/ImageChallenge";
 import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,10 @@ import {
   postLoginVerify,
   postPasswordLogin,
   postStepUpVerify,
+  postImageChallengeSetup,
+  type ImageChallenge as ImageChallengeData,
   type LoginResult,
+  ApiError,
 } from "@/lib/api";
 import { getDeviceFingerprint, getDeviceInfo } from "@/lib/fingerprint";
 import { useKeystrokeCapture } from "@/lib/keystroke";
@@ -38,7 +42,7 @@ export const Route = createFileRoute("/login/")({
   }),
   component: LoginPage,
 });
-type Stage = "email" | "passkey" | "otp" | "password";
+type Stage = "email" | "passkey" | "otp" | "password" | "challenge";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -49,6 +53,7 @@ function LoginPage() {
   const [password, setPassword] = React.useState("");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [result, setResult] = React.useState<LoginResult | null>(null);
+  const [challenge, setChallenge] = React.useState<ImageChallengeData | null>(null);
   const [otp, setOtp] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -68,6 +73,13 @@ function LoginPage() {
 
   async function handleLoginResult(res: LoginResult) {
     setResult(res);
+
+    if (res.stepUpRequired && res.method === "image_challenge") {
+      setChallenge(res.challenge ?? null);
+      setStage("challenge");
+      setPhase("idle");
+      return;
+    }
 
     if (res.stepUpRequired && res.method === "passkey") {
       // Re-confirm with a fresh passkey gesture.
@@ -107,6 +119,31 @@ function LoginPage() {
     setPhase("idle");
   }
 
+  async function solveChallenge(challengeToken: string, clicks: { x: number; y: number }[]) {
+    const [deviceFingerprint, deviceInfo] = await Promise.all([
+      getDeviceFingerprint(),
+      Promise.resolve(getDeviceInfo()),
+    ]);
+    await postStepUpVerify({
+      method: "image_challenge",
+      email,
+      challengeToken,
+      clicks,
+      keystrokes: [],
+      deviceFingerprint,
+      deviceInfo,
+    });
+    setPhase("success");
+    toast.success("It's you — welcome back", { description: "Extra check passed." });
+    goAfterLogin();
+  }
+
+  async function newChallenge() {
+    const next = await postImageChallengeSetup(email);
+    setChallenge(next);
+    setResult((r) => (r ? { ...r, challenge: next } : r));
+  }
+
   async function startLogin(e?: React.FormEvent) {
     e?.preventDefault();
     if (!email.includes("@")) {
@@ -142,7 +179,13 @@ function LoginPage() {
       await handleLoginResult(res);
     } catch (err) {
       setPhase("error");
-      setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
+      if (err instanceof ApiError && err.code === "EMAIL_UNVERIFIED") {
+        setError(
+          "Your email isn't verified yet. Check your inbox for the link we sent, then try again.",
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
+      }
     } finally {
       setBusy(false);
     }
@@ -172,6 +215,7 @@ function LoginPage() {
         keystrokes,
         deviceFingerprint,
         deviceInfo,
+        pasted: passwordKeys.getPasted(),
       });
       await handleLoginResult(res);
     } catch (err) {
@@ -343,6 +387,7 @@ function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       onKeyDown={passwordKeys.onKeyDown}
+                      onPaste={passwordKeys.onPaste}
                       autoComplete="current-password"
                       placeholder="••••••••••"
                       className="h-12 rounded-2xl"
@@ -405,6 +450,33 @@ function LoginPage() {
                   >
                     ← Use a different email
                   </button>
+                </div>
+              ) : stage === "challenge" ? (
+                <div className="space-y-6 text-left">
+                  <div className="space-y-2 text-center">
+                    <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-warning/14 text-[oklch(0.58_0.13_70)]">
+                      <ShieldCheck className="size-7" />
+                    </span>
+                    <h1 className="pt-3 text-2xl">One last check</h1>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      We noticed something unusual about this sign-in. Click the objects below in
+                      the order shown to prove it&apos;s you.
+                    </p>
+                  </div>
+                  {result ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="eyebrow">Session risk</span>
+                      <RiskBadge level={result.riskLevel} score={result.riskScore} />
+                    </div>
+                  ) : null}
+                  {challenge ? (
+                    <ImageChallenge
+                      challenge={challenge}
+                      busy={busy}
+                      onSolve={solveChallenge}
+                      onNewChallenge={newChallenge}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <form onSubmit={confirmOtp} className="space-y-6">

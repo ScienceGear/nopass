@@ -130,6 +130,25 @@ function renderAlertEmail(args: { title: string; body: string }): { subject: str
   };
 }
 
+function renderVerifyEmail(args: { name: string; link: string }): { subject: string; html: string; text: string } {
+  const content = `
+    <p style="margin:0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">Verify your email</p>
+    <h1 style="margin:10px 0 0;color:${BRAND.ink};font-family:Inter,Arial,sans-serif;font-size:22px;font-weight:700;line-height:1.35;">Welcome to NovaBank, ${args.name}</h1>
+    <p style="margin:14px 0 0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:14px;line-height:1.7;">Tap the button below to confirm this email and create your passkey. The link expires in <strong style="color:${BRAND.ink};">15 minutes</strong>.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+      <tr><td align="center">
+        <a href="${args.link}" style="display:inline-block;background:${BRAND.lime};color:#0b0d14;text-decoration:none;font-family:Inter,Arial,sans-serif;font-size:14px;font-weight:700;padding:14px 28px;border-radius:14px;">Verify my email</a>
+      </td></tr>
+    </table>
+    <p style="margin:0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.7;">If the button doesn't work, paste this link into your browser:<br/><span style="color:${BRAND.ink};word-break:break-all;">${args.link}</span></p>
+    <p style="margin:14px 0 0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:12px;line-height:1.7;">If you didn't start an account with this email, you can ignore this message.</p>`;
+  return {
+    subject: "Verify your NovaBank email",
+    html: layout(`Confirm your email and finish creating your NovaBank account.`, content),
+    text: `Welcome to NovaBank, ${args.name}.\n\nConfirm your email by opening:\n${args.link}\n\nThe link expires in 15 minutes. If you didn't start this account, ignore this email.`,
+  };
+}
+
 /* ── Delivery ─────────────────────────────────────────────────────────── */
 
 async function deliver(email: string, mail: { subject: string; html: string; text: string }) {
@@ -192,5 +211,10 @@ export async function verifyOtp(email: string, code: string, purpose: string): P
 
 export async function sendAlertEmail(email: string, subject: string, body: string) {
   const mail = renderAlertEmail({ title: subject, body });
+  await deliver(email, mail);
+}
+
+export async function sendVerificationEmail(email: string, name: string, link: string) {
+  const mail = renderVerifyEmail({ name, link });
   await deliver(email, mail);
 }

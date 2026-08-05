@@ -11,11 +11,13 @@ const MAX_SAMPLES = 600;
 /**
  * Capture key-press dwell times from an input. Attach `onKeyDown` to the input
  * and call `getSamples()` when submitting. Samples feed the backend's
- * behavioural risk scoring.
+ * behavioural risk scoring. Also tracks whether the value was pasted rather
+ * than typed (paste bypasses keystroke capture, so it's its own signal).
  */
 export function useKeystrokeCapture() {
   const samples = React.useRef<KeystrokeSample[]>([]);
   const last = React.useRef<{ key: number; time: number } | null>(null);
+  const wasPasted = React.useRef(false);
 
   const onKeyDown = React.useCallback((e: React.KeyboardEvent<Element>) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab" || e.key === "CapsLock") return;
@@ -28,6 +30,10 @@ export function useKeystrokeCapture() {
     last.current = { key: code, time: now };
   }, []);
 
+  const onPaste = React.useCallback(() => {
+    wasPasted.current = true;
+  }, []);
+
   const getSamples = React.useCallback((): KeystrokeSample[] => {
     const out = samples.current.slice();
     samples.current = [];
@@ -35,5 +41,11 @@ export function useKeystrokeCapture() {
     return out;
   }, []);
 
-  return { onKeyDown, getSamples };
+  const getPasted = React.useCallback((): boolean => {
+    const v = wasPasted.current;
+    wasPasted.current = false;
+    return v;
+  }, []);
+
+  return { onKeyDown, onPaste, getSamples, getPasted };
 }

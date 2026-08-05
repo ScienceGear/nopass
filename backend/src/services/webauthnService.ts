@@ -58,8 +58,13 @@ function challengeFromClientData(clientDataJSON: string): string {
 // ---------------------------------------------------------------------------
 
 export async function buildRegistrationOptions(email: string, name: string): Promise<PublicKeyCredentialCreationOptionsJSON> {
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw new AppError(409, "Account already registered — try logging in.");
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    include: { credentials: true },
+  });
+  // A pending (email-verified but passkey-less) user is fine here; the
+  // registerOptions route has already gated on the verification token.
+  if (existing?.credentials.length) throw new AppError(409, "Account already registered — try logging in.");
 
   const opts = await generateRegistrationOptions({
     rpName: env.WEBAUTHN_RP_NAME,
