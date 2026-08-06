@@ -14,7 +14,6 @@ router.post("/register/verify", authLimiter, requireAuth, auth.registerVerify);
 
 // Authenticated, strictly ordered onboarding after email verification.
 router.get("/onboarding/status", requireAuth, auth.onboardingStatus);
-router.post("/onboarding/password", authLimiter, requireAuth, auth.onboardingSetPassword);
 router.post("/onboarding/passkey/options", authLimiter, requireAuth, auth.onboardingPasskeyOptions);
 router.post("/onboarding/passkey/verify", authLimiter, requireAuth, auth.onboardingPasskeyVerify);
 router.get("/onboarding/image-challenge/pool", requireAuth, auth.onboardingImagePool);
@@ -24,10 +23,10 @@ router.post("/onboarding/image-challenge/setup", authLimiter, requireAuth, auth.
 router.post("/login/options", authLimiter, auth.loginOptions);
 router.post("/login/verify", authLimiter, auth.loginVerify);
 
-// Password fallback
-router.post("/password/login", otpLimiter, auth.passwordLogin);
-router.post("/password/set", authLimiter, requireAuth, auth.setPassword);
-router.post("/password/remove", authLimiter, requireAuth, auth.removePassword);
+// Passwordless email (magic-link) + recovery-code login
+router.post("/login/email-otp", otpLimiter, auth.requestEmailLogin);
+router.post("/login/email-otp/verify", otpLimiter, auth.verifyEmailLogin);
+router.post("/login/recovery-code", otpLimiter, auth.recoverLogin);
 
 // Image-sequence step-up
 router.post("/image-challenge/setup", authLimiter, optionalAuth, auth.setupImageChallenge);

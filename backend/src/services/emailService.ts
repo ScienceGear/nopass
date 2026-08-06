@@ -46,6 +46,7 @@ const BRAND = {
 const OTP_PURPOSE: Record<string, string> = {
   login_step_up: "Your NovaBank sign-in code",
   recovery: "Your NovaBank recovery code",
+  login_email: "Your NovaBank sign-in link",
   transfer_approval: "Approve your NovaBank transfer",
 };
 
@@ -93,7 +94,7 @@ function codeBlock(code: string): string {
     </table>`;
 }
 
-function renderOtpEmail(args: { code: string; purpose: "login_step_up" | "recovery" | "transfer_approval"; expiresMinutes: number }): {
+function renderOtpEmail(args: { code: string; purpose: "login_step_up" | "recovery" | "login_email" | "transfer_approval"; expiresMinutes: number }): {
   subject: string;
   html: string;
   text: string;
@@ -104,7 +105,9 @@ function renderOtpEmail(args: { code: string; purpose: "login_step_up" | "recove
       ? "to confirm it's really you on this device."
       : args.purpose === "transfer_approval"
         ? "to approve this transfer. If you didn't start a transfer, ignore this email."
-        : "to reset your sign-in. If you didn't request recovery, ignore this email.";
+        : args.purpose === "login_email"
+          ? "to sign in without a passkey. If you didn't request a link, ignore this email."
+          : "to reset your sign-in. If you didn't request recovery, ignore this email.";
   const content = `
     <p style="margin:0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">Security code</p>
     <h1 style="margin:10px 0 0;color:${BRAND.ink};font-family:Inter,Arial,sans-serif;font-size:22px;font-weight:700;line-height:1.35;">${label}</h1>
@@ -170,7 +173,10 @@ async function deliver(email: string, mail: { subject: string; html: string; tex
 }
 
 /** Create + deliver an OTP. Returns the plaintext (for dev surfacing only). */
-export async function sendOtp(email: string, purpose: "login_step_up" | "recovery" | "transfer_approval"): Promise<string> {
+export async function sendOtp(
+  email: string,
+  purpose: "login_step_up" | "recovery" | "login_email" | "transfer_approval",
+): Promise<string> {
   const code = generateOtp();
   const codeHash = await hashRecoveryCode(code);
 

@@ -8,14 +8,10 @@ export interface TokenPayload {
   email: string;
 }
 
-/** Argon2id — the only acceptable password hashing algorithm here. */
-export async function hashPassword(password: string): Promise<string> {
-  return argon2.hash(password, { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 });
-}
-
-export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+/** Argon2id verify for opaque one-time secrets (recovery codes, OTPs). */
+export async function verifyPassword(hash: string, value: string): Promise<boolean> {
   try {
-    return await argon2.verify(hash, password);
+    return await argon2.verify(hash, value);
   } catch {
     return false;
   }

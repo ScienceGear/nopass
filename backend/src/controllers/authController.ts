@@ -31,15 +31,13 @@ import { evaluateRisk } from "../services/riskEngine.js";
 import { assessContext, type RiskContextInput } from "../services/riskContextService.js";
 import { mergeSample, emptyProfile, type KeystrokeProfile } from "../services/keystrokeService.js";
 import { sendOtp, verifyOtp, sendAlertEmail, sendVerificationEmail } from "../services/emailService.js";
-import { checkEmailBreach, checkPasswordBreach } from "../services/hibpService.js";
+import { checkEmailBreach } from "../services/hibpService.js";
 import { markDeviceTrusted } from "../services/deviceService.js";
 import { geoFromIp, formatLocation } from "../utils/geo.js";
 import {
   generateRecoveryCodes,
-  hashPassword,
   signAccessToken,
   signRefreshToken,
-  verifyPassword,
   verifyRefreshToken,
   randomToken,
   verifyPassword as verifyRecoveryCode,
@@ -48,9 +46,6 @@ import { env, isProduction } from "../config/env.js";
 import {
   loginOptionsSchema,
   loginVerifySchema,
-  passwordLoginSchema,
-  passwordRemoveSchema,
-  passwordSetSchema,
   qrApproveSchema,
   registerInitiateSchema,
   registerOptionsSchema,
@@ -61,6 +56,9 @@ import {
   verifyEmailSchema,
   imageChallengeSetupSchema,
   onboardingImageSequenceSchema,
+  emailLoginRequestSchema,
+  emailLoginVerifySchema,
+  recoveryLoginSchema,
 } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
 
@@ -70,9 +68,9 @@ const VERIFY_TTL_MS = 15 * 60 * 1000;
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 type LoginContext = RiskContextInput;
-type OnboardingStep = "email_pending" | "password_set" | "passkey_set" | "complete";
+type OnboardingStep = "email_pending" | "passkey_set" | "complete";
 
-const onboardingOrder: OnboardingStep[] = ["email_pending", "password_set", "passkey_set", "complete"];
+const onboardingOrder: OnboardingStep[] = ["email_pending", "passkey_set", "complete"];
 
 async function requireOnboardingStep(userId: string | undefined, expected: OnboardingStep) {
   if (!userId) throw new AppError(401, "Not authenticated.");
@@ -270,59 +268,14 @@ export const onboardingStatus: RequestHandler = asyncHandler(async (req, res) =>
   });
 });
 
-export const onboardingSetPassword: RequestHandler = asyncHandler(async (req, res) => {
-  const user = await requireOnboardingStep(req.userId, "email_pending");
-  const { password, keystrokes } = passwordSetSchema.parse(req.body);
-  let breachWarning = false;
-  if (env.HIBP_API_KEY) {
-    const count = await checkPasswordBreach(password);
-    breachWarning = count !== null && count > 0;
-  }
-
-  const passwordHash = await hashPassword(password);
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: user.id }, data: { passwordHash, onboardingStep: "password_set" } }),
-    prisma.loginHistory.create({
-      data: {
-        userId: user.id,
-        eventType: "alert",
-        deviceInfo: "Onboarding",
-        ipAddress: req.ip ?? "unknown",
-        riskScore: 0,
-        riskAction: "allow",
-        details: JSON.stringify({ kind: "backup_password_set", breached: breachWarning }),
-      },
-    }),
-  ]);
-
-  if (keystrokes && keystrokes.length > 3) {
-    const profileRow = await prisma.keystrokeProfile.findUnique({ where: { userId: user.id } });
-    const profile: KeystrokeProfile = profileRow?.transitions
-      ? (JSON.parse(profileRow.transitions) as KeystrokeProfile)
-      : emptyProfile();
-    const merged = mergeSample(profile, {
-      transitions: keystrokes.map((sample) => [sample.prev, sample.curr] as [number, number]),
-      timings: keystrokes.map((sample) => sample.delta),
-    });
-    const sampleCount = Object.values(merged).reduce((total, sample) => total + sample.count, 0);
-    await prisma.keystrokeProfile.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, transitions: JSON.stringify(merged), sampleCount },
-      update: { transitions: JSON.stringify(merged), sampleCount },
-    });
-  }
-
-  res.json({ ok: true, breachWarning, onboardingStep: "password_set" });
-});
-
 export const onboardingPasskeyOptions: RequestHandler = asyncHandler(async (req, res) => {
-  const user = await requireOnboardingStep(req.userId, "password_set");
+  const user = await requireOnboardingStep(req.userId, "email_pending");
   const options = await buildRegistrationOptions(user.email, user.name);
   res.json({ options });
 });
 
 export const onboardingPasskeyVerify: RequestHandler = asyncHandler(async (req, res) => {
-  const user = await requireOnboardingStep(req.userId, "password_set");
+  const user = await requireOnboardingStep(req.userId, "email_pending");
   const { credential, deviceFingerprint, deviceInfo } = registerVerifySchema
     .pick({ credential: true, deviceFingerprint: true, deviceInfo: true })
     .parse(req.body);
@@ -393,7 +346,7 @@ export const registerOptions: RequestHandler = asyncHandler(async (req, res) => 
   if (!user || !user.emailVerified) {
     throw new AppError(403, "Verify your email first — we emailed you a link. Check your inbox.", { code: "EMAIL_UNVERIFIED" });
   }
-  if (user.onboardingStep !== "password_set" || req.userId !== user.id) {
+  if (user.onboardingStep !== "email_pending" || req.userId !== user.id) {
     throw new AppError(409, "Continue registration through the secure onboarding flow.", {
       code: "ONBOARDING_INCOMPLETE",
       currentStep: user.onboardingStep,
@@ -414,7 +367,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
   });
   if (!user) throw new AppError(404, "Start signup first — we need to verify your email.");
   if (!user.emailVerified) throw new AppError(403, "Your email isn't verified yet.", { code: "EMAIL_UNVERIFIED" });
-  if (user.onboardingStep !== "password_set" || req.userId !== user.id) {
+  if (user.onboardingStep !== "email_pending" || req.userId !== user.id) {
     throw new AppError(409, "Continue registration through the secure onboarding flow.", {
       code: "ONBOARDING_INCOMPLETE",
       currentStep: user.onboardingStep,
@@ -526,7 +479,7 @@ export const loginOptions: RequestHandler = asyncHandler(async (req, res) => {
     credentials,
   });
 
-  res.json({ options, email: user.email, hasPassword: user.passwordHash != null });
+  res.json({ options, email: user.email });
 });
 
 export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
@@ -615,24 +568,15 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// PASSWORD FALLBACK
+// EMAIL (MAGIC LINK) + RECOVERY-CODE LOGIN
 // ---------------------------------------------------------------------------
 
-/**
- * Password login — a secondary path for users who set a password. The same
- * risk engine runs here as for passkeys, so a known device signs straight in
- * and an unusual device is asked to step up.
- */
-export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
-  const body = passwordLoginSchema.parse(req.body);
+/** Send a one-time sign-in code to the account email. */
+export const requestEmailLogin: RequestHandler = asyncHandler(async (req, res) => {
+  const body = emailLoginRequestSchema.parse(req.body);
   const email = body.email.trim().toLowerCase();
-
-  const user = await prisma.user.findUnique({ where: { email }, include: { credentials: true } });
-  if (!user || !user.passwordHash) {
-    // Same generic message for "no account" and "no password set" to avoid
-    // account enumeration; the UI surfaces the fallback via /auth/login/options.
-    throw new AppError(401, "Invalid credentials.");
-  }
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw new AppError(404, "No account found with this email. Sign up first.");
   if (user.onboardingStep !== "complete") {
     throw new AppError(409, "Finish setting up your account before signing in.", {
       code: "ONBOARDING_INCOMPLETE",
@@ -640,132 +584,122 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
     });
   }
 
-  const ok = await verifyPassword(user.passwordHash, body.password);
-  if (!ok) throw new AppError(401, "Invalid credentials.");
-
-  const ip = req.ip ?? "unknown";
+  // Record the context risk without blocking the send, so the audit trail is
+  // complete even if the code is never used.
   const ctx: LoginContext = {
     email,
     deviceFingerprint: body.deviceFingerprint,
     deviceInfo: body.deviceInfo,
     keystrokes: body.keystrokes,
-    pasted: body.pasted,
   };
-
-  const input = await assessContext(user, ctx, ip);
+  const input = await assessContext(user, ctx, req.ip ?? "unknown");
   const assessment = evaluateRisk(input);
-
-  await prisma.loginHistory.create({
-    data: {
-      userId: user.id,
-      eventType: "login",
-      deviceInfo: body.deviceInfo,
-      ipAddress: ip,
-      location: input.location,
-      riskScore: assessment.score,
-      riskAction: assessment.action,
-      details: JSON.stringify({ signals: assessment.signals, method: "password", lat: null, lon: null }),
-    },
-  });
-
   if (assessment.action === "block") {
-    await sendAlertEmail(email, "NovaBank blocked a sign-in attempt", `We blocked a sign-in from ${body.deviceInfo} (${ip}). If this was you, contact support.`);
+    await sendAlertEmail(
+      email,
+      "NovaBank blocked a sign-in attempt",
+      `We blocked a sign-in request from ${body.deviceInfo} (${req.ip}). If this was you, contact support.`,
+    );
+    await prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        eventType: "login",
+        deviceInfo: body.deviceInfo,
+        ipAddress: req.ip ?? "unknown",
+        location: input.location,
+        riskScore: assessment.score,
+        riskAction: "block",
+        details: JSON.stringify({ signals: assessment.signals, method: "email_code" }),
+      },
+    });
     throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
   }
 
-  if (assessment.action === "step_up") {
-    const userCreds = buildUserCredentialsFromDb(user.credentials);
-    if (userCreds.length > 0) {
-      const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
-      return res.json({ stepUpRequired: true, method: "passkey", risk: assessment, options });
+  const otp = await sendOtp(email, "login_email");
+  res.json({
+    ok: true,
+    email,
+    risk: assessment,
+    ...(isProduction ? {} : { devOtp: otp }),
+  });
+});
+
+/** Exchange the emailed code for a signed-in session. */
+export const verifyEmailLogin: RequestHandler = asyncHandler(async (req, res) => {
+  const body = emailLoginVerifySchema.parse(req.body);
+  const email = body.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw new AppError(404, "Account not found.");
+
+  const ok = await verifyOtp(email, body.otp, "login_email");
+  if (!ok) throw new AppError(401, "That code was incorrect or expired.");
+
+  const ctx: LoginContext = {
+    email,
+    deviceFingerprint: body.deviceFingerprint,
+    deviceInfo: body.deviceInfo,
+    keystrokes: body.keystrokes,
+  };
+  const input = await assessContext(user, ctx, req.ip ?? "unknown");
+  const assessment = evaluateRisk(input);
+  if (assessment.action === "block") {
+    await sendAlertEmail(
+      email,
+      "NovaBank blocked a sign-in attempt",
+      `We blocked a sign-in from ${body.deviceInfo} (${req.ip}). If this was you, contact support.`,
+    );
+    throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
+  }
+
+  const { accessToken, refreshToken, user: outUser } = await completeLogin(
+    user,
+    ctx,
+    assessment.score,
+    "allow",
+    req.ip ?? "unknown",
+  );
+  res.json({ verified: true, accessToken, refreshToken, user: outUser });
+});
+
+/** Redeem a single-use recovery code — the last-resort passwordless path. */
+export const recoverLogin: RequestHandler = asyncHandler(async (req, res) => {
+  const body = recoveryLoginSchema.parse(req.body);
+  const email = body.email.trim().toLowerCase();
+  const code = body.code.trim();
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw new AppError(404, "Account not found.");
+
+  let redeemed = false;
+  const rows = await prisma.recoveryCode.findMany({ where: { userId: user.id, used: false } });
+  for (const row of rows) {
+    if (await verifyRecoveryCode(row.codeHash, code)) {
+      await prisma.recoveryCode.update({ where: { id: row.id }, data: { used: true, usedAt: new Date() } });
+      redeemed = true;
+      break;
     }
-    const otp = await sendOtp(email, "login_step_up");
-    return res.json({
-      stepUpRequired: true,
-      method: "otp_email",
-      risk: assessment,
-      ...(isProduction ? {} : { devOtp: otp }),
-    });
   }
+  if (!redeemed) throw new AppError(401, "That recovery code was invalid or already used.");
 
-  if (assessment.action === "image_challenge") {
-    await sendAlertEmail(email, "NovaBank needs an extra check", `We noticed unusual activity from ${body.deviceInfo} (${ip}) and asked for an image verification. If this wasn't you, contact support.`);
-    const challenge = await createImageChallenge(user.id);
-    return res.json({ stepUpRequired: true, method: "image_challenge", risk: assessment, challenge });
-  }
+  await sendAlertEmail(
+    email,
+    "A recovery code was used to sign in",
+    `A recovery code signed in from ${body.deviceInfo} (${req.ip}). If this wasn't you, contact support immediately.`,
+  );
 
-  const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, assessment.score, "allow", ip);
-  res.json({ stepUpRequired: false, risk: assessment, accessToken, refreshToken, user: outUser });
-});
-
-/** Set or change the password fallback for a signed-in user. */
-export const setPassword: RequestHandler = asyncHandler(async (req, res) => {
-  if (!req.userId) throw new AppError(401, "Not authenticated.");
-  const { password, currentPassword } = passwordSetSchema.parse(req.body);
-
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  if (!user) throw new AppError(404, "User not found.");
-
-  if (user.passwordHash) {
-    if (!currentPassword) throw new AppError(400, "Enter your current password to change it.");
-    const ok = await verifyPassword(user.passwordHash, currentPassword);
-    if (!ok) throw new AppError(401, "Current password is incorrect.");
-  }
-
-  // HIBP k-anonymity check. A breached password is *allowed* (users pick what
-  // they pick) but flagged so the UI can warn them to change it.
-  let breachWarning = false;
-  if (env.HIBP_API_KEY) {
-    const count = await checkPasswordBreach(password);
-    if (count !== null && count > 0) breachWarning = true;
-  }
-
-  const passwordHash = await hashPassword(password);
-  await prisma.user.update({ where: { id: req.userId }, data: { passwordHash } });
-
-  await prisma.loginHistory.create({
-    data: {
-      userId: user.id,
-      eventType: "alert",
-      deviceInfo: "NovaBank Web",
-      ipAddress: req.ip ?? "unknown",
-      location: null,
-      riskScore: 0,
-      riskAction: "allow",
-      details: JSON.stringify({ kind: "password_set", breached: breachWarning }),
-    },
-  });
-
-  res.json({ ok: true, hasPassword: true, breachWarning });
-});
-
-/** Remove the password fallback (must confirm the current password first). */
-export const removePassword: RequestHandler = asyncHandler(async (req, res) => {
-  if (!req.userId) throw new AppError(401, "Not authenticated.");
-  const { password } = passwordRemoveSchema.parse(req.body);
-
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  if (!user || !user.passwordHash) throw new AppError(404, "This account has no password set.");
-
-  const ok = await verifyPassword(user.passwordHash, password);
-  if (!ok) throw new AppError(401, "Password is incorrect.");
-
-  await prisma.user.update({ where: { id: req.userId }, data: { passwordHash: null } });
-
-  await prisma.loginHistory.create({
-    data: {
-      userId: user.id,
-      eventType: "alert",
-      deviceInfo: "NovaBank Web",
-      ipAddress: req.ip ?? "unknown",
-      location: null,
-      riskScore: 0,
-      riskAction: "allow",
-      details: JSON.stringify({ kind: "password_removed" }),
-    },
-  });
-
-  res.json({ ok: true, hasPassword: false });
+  const ctx: LoginContext = {
+    email,
+    deviceFingerprint: body.deviceFingerprint,
+    deviceInfo: body.deviceInfo,
+    keystrokes: body.keystrokes,
+  };
+  const { accessToken, refreshToken, user: outUser } = await completeLogin(
+    user,
+    ctx,
+    0,
+    "allow",
+    req.ip ?? "unknown",
+  );
+  res.json({ verified: true, accessToken, refreshToken, user: outUser });
 });
 
 // ---------------------------------------------------------------------------
@@ -835,10 +769,6 @@ export const stepUpVerify: RequestHandler = asyncHandler(async (req, res) => {
         transports: credentialRecord.transports as AuthenticatorTransportFuture[],
       });
       ok = true;
-    }
-  } else if (body.method === "password") {
-    if (user.passwordHash) {
-      ok = await verifyPassword(user.passwordHash, body.password ?? "");
     }
   } else if (body.method === "image_challenge") {
     if (!body.challengeToken || !body.clicks || body.clicks.length === 0) {
@@ -1005,7 +935,6 @@ export const me: RequestHandler = asyncHandler(async (req, res) => {
       email: user.email,
       name: user.name,
       createdAt: user.createdAt,
-      hasPassword: user.passwordHash != null,
       emailVerified: user.emailVerified,
     },
   });

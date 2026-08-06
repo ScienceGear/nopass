@@ -13,12 +13,11 @@ datasource db {
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
-  name          String
+name          String
   phone         String?
   balance       Decimal  @default(500000) @db.Decimal(12, 2)
-  passwordHash  String? // argon2id, set only if the user opts into the password fallback
   emailVerified Boolean  @default(false) // gate: passkeys can only be registered after email verification
-  onboardingStep String  @default("email_pending") // email_pending -> password_set -> passkey_set -> complete
+  onboardingStep String  @default("email_pending") // email_pending -> passkey_set -> complete
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

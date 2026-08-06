@@ -4,11 +4,10 @@ import { prisma } from "../config/db.js";
 import { getRedis } from "../config/redis.js";
 import { AppError, asyncHandler } from "../middleware/errorHandler.js";
 import { sendOtp, verifyOtp, sendAlertEmail } from "../services/emailService.js";
-import { verifyPassword } from "../utils/crypto.js";
 import { assessContext, type RiskContextInput } from "../services/riskContextService.js";
 import { evaluateRisk, amountRisk } from "../services/riskEngine.js";
 import { verifyImageChallenge, createImageChallenge } from "../services/imageChallengeService.js";
-import { transferSchema, activityQuerySchema, passwordSchema } from "../utils/validators.js";
+import { transferSchema, activityQuerySchema } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
 
 const TRANSFER_TOKEN_TTL = 15 * 60; // seconds
@@ -151,7 +150,6 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
       transferToken,
       amount: amount.toString(),
       recipient,
-      hasPassword: user.passwordHash != null,
       challenge,
     });
   }
@@ -166,7 +164,6 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
       transferToken,
       amount: amount.toString(),
       recipient,
-      hasPassword: user.passwordHash != null,
       devOtp: process.env.NODE_ENV !== "production" ? otp : undefined,
     });
   }
@@ -183,11 +180,10 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 export const transferConfirm: RequestHandler = asyncHandler(async (req, res) => {
-  const { transferToken, otp, password, method, challengeToken, clicks } = req.body as {
+const { transferToken, otp, method, challengeToken, clicks } = req.body as {
     transferToken?: string;
     otp?: string;
-    password?: string;
-    method?: "otp_email" | "password" | "image_challenge";
+    method?: "otp_email" | "image_challenge";
     challengeToken?: string;
     clicks?: { x: number; y: number }[];
   };
@@ -204,11 +200,7 @@ export const transferConfirm: RequestHandler = asyncHandler(async (req, res) => 
   if (!user) throw new AppError(404, "User not found.");
 
   let ok = false;
-  if (method === "password") {
-    passwordSchema.parse(password);
-    if (!password) throw new AppError(400, "Password required.");
-    if (user.passwordHash) ok = await verifyPassword(user.passwordHash, password);
-  } else if (method === "image_challenge") {
+  if (method === "image_challenge") {
     if (!challengeToken || !clicks || clicks.length === 0) {
       throw new AppError(400, "Challenge token and click sequence required.");
     }

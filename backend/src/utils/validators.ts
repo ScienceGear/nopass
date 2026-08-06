@@ -43,39 +43,35 @@ export const keystrokeSampleSchema = z
   .max(600)
   .optional();
 
-/** Password fallback policy — minimum 10 chars, with letters + digits. */
-export const passwordSchema = z
-  .string()
-  .min(10, "Password must be at least 10 characters long.")
-  .max(128, "Password must be 128 characters or fewer.")
-  .refine((v) => /[a-zA-Z]/.test(v) && /\d/.test(v), {
-    message: "Password must contain at least one letter and one number.",
-  });
-
-export const passwordLoginSchema = z.object({
+export const emailLoginRequestSchema = z.object({
   email: z.string().email(),
-  password: passwordSchema,
-  keystrokes: keystrokeSampleSchema,
   deviceFingerprint: z.string().min(8).max(256),
   deviceInfo: z.string().min(1).max(512),
-  pasted: z.boolean().optional(),
-});
-
-export const passwordSetSchema = z.object({
-  password: passwordSchema,
-  currentPassword: z.string().optional(),
   keystrokes: keystrokeSampleSchema,
 });
 
+export const emailLoginVerifySchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
+});
+
+export const recoveryLoginSchema = z.object({
+  email: z.string().email(),
+  code: z.string().min(4).max(16),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
+});
+
+/** Password fallback policy — minimum 10 chars, with letters + digits. */
 export const onboardingImageSequenceSchema = z.object({
   sequence: z
     .array(z.object({ imageKey: z.string().min(1), regionId: z.string().min(1) }))
     .min(2)
     .max(4),
-});
-
-export const passwordRemoveSchema = z.object({
-  password: passwordSchema,
 });
 
 export const loginVerifySchema = z.object({
@@ -105,11 +101,10 @@ export const qrApproveSchema = z.object({
 });
 
 export const stepUpVerifySchema = z.object({
-  method: z.enum(["otp_email", "passkey", "recovery_code", "password", "image_challenge"]),
+  method: z.enum(["otp_email", "passkey", "recovery_code", "image_challenge"]),
   email: z.string().email(),
   otp: z.string().length(6).optional(),
   code: z.string().min(4).optional(),
-  password: passwordSchema.optional(),
   credential: z.any().optional(),
   challengeToken: z.string().min(8).optional(),
   clicks: z
