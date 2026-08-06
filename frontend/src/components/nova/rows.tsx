@@ -53,7 +53,7 @@ export function TransactionRow({ txn }: { txn: Transaction }) {
           txn.status === "declined"
             ? "bg-destructive/10 text-destructive"
             : credit
-              ? "bg-success/12 text-[oklch(0.52_0.14_152)]"
+              ? "bg-success/12 text-primary"
               : "bg-muted text-ink/70 group-hover:bg-lime-soft",
         )}
       >
@@ -69,7 +69,7 @@ export function TransactionRow({ txn }: { txn: Transaction }) {
         <p
           className={cn(
             "tnum text-sm font-semibold",
-            credit && "text-[oklch(0.52_0.14_152)]",
+            credit && "text-primary",
             txn.status === "declined" && "text-muted-foreground line-through",
           )}
         >

@@ -84,7 +84,7 @@ export function PasskeyGlyph({ phase, className }: { phase: PasskeyPhase; classN
     <span
       className={cn(
         "relative grid size-20 shrink-0 place-items-center rounded-[1.5rem] transition-colors duration-300",
-        phase === "success" ? "bg-success/14 text-[oklch(0.52_0.14_152)]" : "bg-lime-soft text-ink",
+        phase === "success" ? "bg-success/14 text-primary" : "bg-lime-soft text-ink",
         className,
       )}
     >

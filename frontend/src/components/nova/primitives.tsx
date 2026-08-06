@@ -11,8 +11,8 @@ const novaButton = cva(
     variants: {
       variant: {
         primary:
-          "bg-lime text-ink shadow-[0_10px_24px_-10px_oklch(0.8_0.19_133_/_0.85)] hover:-translate-y-0.5 hover:bg-lime-deep hover:shadow-[0_18px_36px_-12px_oklch(0.8_0.19_133_/_0.9)] active:translate-y-0",
-        secondary: "bg-lime-soft text-ink hover:-translate-y-0.5 hover:bg-[oklch(0.945_0.07_133)]",
+          "bg-lime text-white shadow-[0_10px_24px_-10px_oklch(0.55_0.21_263_/_0.5)] hover:-translate-y-0.5 hover:bg-lime-deep hover:shadow-[0_18px_36px_-12px_oklch(0.5_0.21_264_/_0.55)] active:translate-y-0",
+        secondary: "bg-lime-soft text-ink hover:-translate-y-0.5 hover:bg-[oklch(0.93_0.05_260)]",
         outline:
           "border border-[oklch(0.207_0.014_251_/_0.14)] bg-card text-ink hover:-translate-y-0.5 hover:border-[oklch(0.207_0.014_251_/_0.28)]",
         ghost: "text-ink/80 hover:text-ink hover:bg-muted",
@@ -85,7 +85,7 @@ export function RiskBadge({
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[0.6875rem] uppercase tracking-[0.1em]",
-        level === "low" && "border-success/25 bg-success/10 text-[oklch(0.5_0.13_152)]",
+        level === "low" && "border-success/25 bg-success/10 text-primary",
         level === "medium" && "border-warning/30 bg-warning/12 text-[oklch(0.58_0.13_70)]",
         level === "high" && "border-destructive/25 bg-destructive/10 text-destructive",
         className,

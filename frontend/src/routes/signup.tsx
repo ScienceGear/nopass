@@ -350,7 +350,7 @@ function Signup() {
                 </div>
               ) : (
                 <div className="space-y-5 text-center">
-                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-[oklch(0.52_0.14_152)]">
+                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-primary">
                     <Check className="size-7" strokeWidth={2.4} />
                   </span>
                   <div className="space-y-2">

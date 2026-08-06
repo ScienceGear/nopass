@@ -91,7 +91,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "author", content: "NovaBank" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "theme-color", content: "#E9FADD" },
+      { name: "theme-color", content: "#EDF4FF" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

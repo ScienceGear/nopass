@@ -135,7 +135,7 @@ function DesktopQr() {
         <div className="mx-auto mt-7 grid size-[15rem] place-items-center rounded-3xl bg-lime-soft p-4">
           {qr ? (
             status === "approved" ? (
-              <span className="grid size-20 place-items-center rounded-3xl bg-card text-[oklch(0.52_0.14_152)]">
+              <span className="grid size-20 place-items-center rounded-3xl bg-card text-primary">
                 <Check className="size-10" strokeWidth={2.4} />
               </span>
             ) : (
@@ -154,7 +154,7 @@ function DesktopQr() {
 
         <p
           className={`mt-6 font-mono text-[0.6875rem] uppercase tracking-[0.14em] ${
-            status === "approved" ? "text-[oklch(0.52_0.14_152)]" : "text-muted-foreground"
+            status === "approved" ? "text-primary" : "text-muted-foreground"
           }`}
         >
           {status === "approved" ? "Approved ✓ · opening your account" : "Waiting for approval…"}

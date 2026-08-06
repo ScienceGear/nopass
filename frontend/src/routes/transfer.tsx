@@ -189,7 +189,7 @@ function Transfer() {
             {receipt ? (
               <Reveal>
                 <Panel className="text-center">
-                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-[oklch(0.52_0.14_152)]">
+                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-primary">
                     <Check className="size-7" strokeWidth={2.4} />
                   </span>
                   <h1 className="mt-5 text-2xl">Money sent</h1>

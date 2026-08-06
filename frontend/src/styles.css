@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * NovaBank design system — lime / navy / white "quiet luxury" fintech.
+ * NovaBank design system — cobalt blue / navy / white "quiet luxury" fintech.
  * All colors are oklch tokens. Never hardcode colors in components.
  */
 
@@ -60,10 +60,10 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --shadow-panel: 0 40px 120px -40px oklch(0.35 0.09 140 / 0.35);
+  --shadow-panel: 0 40px 120px -40px oklch(0.35 0.09 260 / 0.35);
   --shadow-card: 0 20px 60px -15px oklch(0.2 0.02 250 / 0.08);
   --shadow-lift: 0 14px 34px -12px oklch(0.2 0.02 250 / 0.22);
-  --shadow-plate: 0 30px 70px -20px oklch(0.55 0.16 135 / 0.45), inset 0 1px 0 oklch(1 0 0 / 0.45);
+  --shadow-plate: 0 30px 70px -20px oklch(0.55 0.16 260 / 0.45), inset 0 1px 0 oklch(1 0 0 / 0.45);
 }
 
 :root {
@@ -71,22 +71,22 @@
 
   /* #12181F */
   --navy-ink: oklch(0.207 0.014 251);
-  /* #8FE23D */
-  --lime: oklch(0.869 0.196 130.6);
-  --lime-deep: oklch(0.795 0.196 133);
-  /* #E9FADD */
-  --lime-soft: oklch(0.968 0.043 133);
+  /* #2563EB */
+  --lime: oklch(0.546 0.215 262.9);
+  --lime-deep: oklch(0.47 0.21 264);
+  /* #EDF4FF */
+  --lime-soft: oklch(0.966 0.02 260);
   --hairline: oklch(0.207 0.014 251 / 0.08);
 
-  --background: oklch(0.968 0.043 133);
+  --background: oklch(0.966 0.02 260);
   --foreground: var(--navy-ink);
   --card: oklch(1 0 0);
   --card-foreground: var(--navy-ink);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--navy-ink);
   --primary: var(--lime);
-  --primary-foreground: var(--navy-ink);
-  --secondary: oklch(0.985 0.02 133);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.985 0.01 260);
   --secondary-foreground: var(--navy-ink);
   --muted: oklch(0.972 0.004 250);
   /* #7C8690 */
@@ -98,8 +98,7 @@
   --destructive-foreground: oklch(0.99 0 0);
   /* #E8A93A */
   --warning: oklch(0.782 0.145 76);
-  /* #2FAE60 */
-  --success: oklch(0.646 0.153 152);
+  --success: oklch(0.546 0.215 262.9);
   --border: oklch(0.207 0.014 251 / 0.09);
   --input: oklch(0.207 0.014 251 / 0.12);
   --ring: var(--lime-deep);
@@ -107,7 +106,7 @@
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: var(--navy-ink);
   --sidebar-primary: var(--lime);
-  --sidebar-primary-foreground: var(--navy-ink);
+  --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: var(--lime-soft);
   --sidebar-accent-foreground: var(--navy-ink);
   --sidebar-border: oklch(0.207 0.014 251 / 0.09);
@@ -144,16 +143,16 @@
 
   ::selection {
     background: var(--lime);
-    color: var(--navy-ink);
+    color: oklch(1 0 0);
   }
 }
 
-/* Page background: organic lime field with soft light streaks */
+/* Page background: layered blue field with soft light streaks */
 @utility nova-field {
   background:
     radial-gradient(120% 80% at 50% 8%, oklch(1 0 0 / 0.85) 0%, transparent 55%),
-    radial-gradient(90% 60% at 8% 90%, oklch(0.93 0.14 108 / 0.75) 0%, transparent 60%),
-    radial-gradient(80% 60% at 95% 70%, oklch(0.95 0.09 145 / 0.8) 0%, transparent 60%),
+    radial-gradient(90% 60% at 8% 90%, oklch(0.88 0.1 250 / 0.4) 0%, transparent 60%),
+    radial-gradient(80% 60% at 95% 70%, oklch(0.92 0.07 280 / 0.45) 0%, transparent 60%),
     var(--lime-soft);
 }
 
@@ -161,11 +160,11 @@
 @utility nova-silk {
   background: conic-gradient(
     from 210deg at 50% 50%,
-    oklch(0.9 0.13 130 / 0.9),
-    oklch(0.93 0.09 95 / 0.85),
-    oklch(0.88 0.1 45 / 0.6),
-    oklch(0.95 0.06 200 / 0.75),
-    oklch(0.9 0.13 130 / 0.9)
+    oklch(0.72 0.14 260 / 0.9),
+    oklch(0.78 0.1 280 / 0.85),
+    oklch(0.72 0.12 235 / 0.6),
+    oklch(0.88 0.06 220 / 0.75),
+    oklch(0.72 0.14 260 / 0.9)
   );
   filter: blur(48px) saturate(1.15);
 }
