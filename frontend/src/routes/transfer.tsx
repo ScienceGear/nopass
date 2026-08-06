@@ -16,7 +16,6 @@ import {
   type ImageChallenge as ImageChallengeData,
 } from "@/lib/api";
 import { useKeystrokeCapture } from "@/lib/keystroke";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/transfer")({
@@ -47,21 +46,16 @@ function Transfer() {
     transferToken: string;
     reference: string;
     devOtp?: string;
-    hasPassword?: boolean;
-    method?: "otp_email" | "password" | "image_challenge";
+    method?: "otp_email" | "image_challenge";
     challenge?: ImageChallengeData;
   } | null>(null);
-  const [method, setMethod] = React.useState<"otp_email" | "password" | "image_challenge">(
-    "otp_email",
-  );
+  const [method, setMethod] = React.useState<"otp_email" | "image_challenge">("otp_email");
   const [otp, setOtp] = React.useState("");
-  const [stepUpPassword, setStepUpPassword] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
   const [receipt, setReceipt] = React.useState<{ reference: string; amountMinor: number } | null>(
     null,
   );
   const otpKeys = useKeystrokeCapture();
-  const passwordKeys = useKeystrokeCapture();
 
   const amountMinor = Math.round((Number(amount) || 0) * 100);
 
@@ -79,20 +73,17 @@ function Transfer() {
           transferToken: res.intentId,
           reference: res.reference,
           ...(res.devOtp ? { devOtp: res.devOtp } : {}),
-          ...(res.hasPassword ? { hasPassword: res.hasPassword } : {}),
           ...(res.method ? { method: res.method } : {}),
           ...(res.challenge ? { challenge: res.challenge } : {}),
         });
         if (res.method === "image_challenge") {
           setMethod("image_challenge");
-          setStepUpPassword("");
           toast.info("One more step", {
             description: "Tap the objects shown to confirm this transfer.",
           });
         } else {
           setMethod("otp_email");
           setOtp(res.devOtp ?? "");
-          setStepUpPassword("");
           toast.info("One more step", {
             description: "We emailed a code to confirm this transfer.",
           });
@@ -140,28 +131,6 @@ function Transfer() {
   async function confirmStepUp(e: React.FormEvent) {
     e.preventDefault();
     if (!stepUp) return;
-    if (method === "password") {
-      if (!stepUpPassword) {
-        toast.error("Enter your password.");
-        return;
-      }
-      setConfirming(true);
-      try {
-        await postTransferConfirm({
-          transferToken: stepUp.transferToken,
-          method: "password",
-          password: stepUpPassword,
-        });
-        setReceipt({ reference: stepUp.reference, amountMinor });
-        setStepUp(null);
-        toast.success("Transfer verified and sent");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "That password didn't match.");
-      } finally {
-        setConfirming(false);
-      }
-      return;
-    }
     if (!/^\d{6}$/.test(otp)) {
       toast.error("Enter the 6-digit code.");
       return;
@@ -236,24 +205,6 @@ function Transfer() {
                     />
                   </div>
 
-                  {method !== "image_challenge" && stepUp.hasPassword ? (
-                    <div className="mt-6 grid grid-cols-2 gap-1 rounded-2xl bg-muted p-1">
-                      {(["otp_email", "password"] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setMethod(m)}
-                          className={cn(
-                            "rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-                            method === m ? "bg-card text-ink shadow-sm" : "text-muted-foreground",
-                          )}
-                        >
-                          {m === "otp_email" ? "Email code" : "Password"}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
                   {method === "image_challenge" && stepUp.challenge ? (
                     <div className="mt-6">
                       <ImageChallenge
@@ -265,30 +216,16 @@ function Transfer() {
                     </div>
                   ) : (
                     <form onSubmit={confirmStepUp} className="mt-6 space-y-4">
-                      {method === "password" ? (
-                        <Input
-                          autoFocus
-                          type="password"
-                          value={stepUpPassword}
-                          onChange={(e) => setStepUpPassword(e.target.value)}
-                          onKeyDown={passwordKeys.onKeyDown}
-                          onPaste={passwordKeys.onPaste}
-                          autoComplete="current-password"
-                          placeholder="••••••••••"
-                          className="h-14 rounded-2xl text-center font-mono text-lg"
-                        />
-                      ) : (
-                        <Input
-                          autoFocus
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={otp}
-                          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                          onKeyDown={otpKeys.onKeyDown}
-                          placeholder="••••••"
-                          className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
-                        />
-                      )}
+                      <Input
+                        autoFocus
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                        onKeyDown={otpKeys.onKeyDown}
+                        placeholder="••••••"
+                        className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      />
                       <Button type="submit" size="lg" className="w-full" disabled={confirming}>
                         {confirming ? "Verifying…" : "Confirm and send"}{" "}
                         <ArrowRight className="size-4" />
@@ -298,7 +235,6 @@ function Transfer() {
                         onClick={() => {
                           setStepUp(null);
                           setOtp("");
-                          setStepUpPassword("");
                         }}
                         className="w-full text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
                       >

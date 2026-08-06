@@ -19,8 +19,6 @@ import {
   getRecoveryCodes,
   postPasskey,
   postRegenerateRecoveryCodes,
-  postRemovePassword,
-  postSetPassword,
   patchProfile,
   revokeDevice,
 } from "@/lib/api";
@@ -52,15 +50,9 @@ function SecuritySettings() {
   const [showCodes, setShowCodes] = React.useState(false);
   const [codeList, setCodeList] = React.useState<string[]>([]);
   const [adding, setAdding] = React.useState(false);
-  const [pw, setPw] = React.useState("");
-  const [pwConfirm, setPwConfirm] = React.useState("");
-  const [currentPw, setCurrentPw] = React.useState("");
-  const [pwBusy, setPwBusy] = React.useState(false);
   const [name, setName] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [profileBusy, setProfileBusy] = React.useState(false);
-
-  const hasPassword = profile.data?.hasPassword ?? false;
 
   React.useEffect(() => {
     if (passkeys.data) setList(passkeys.data);
@@ -223,142 +215,6 @@ function SecuritySettings() {
                 >
                   View codes
                 </Button>
-              </Panel>
-            </Reveal>
-
-            {/* Password fallback */}
-            <Reveal delay={140}>
-              <Panel>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-lg">Password fallback</h2>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                      {hasPassword
-                        ? "Enabled — sign in with a password when a passkey isn't available."
-                        : "Optional — a password lets you sign in when no passkey is available."}
-                    </p>
-                  </div>
-                  <PillBadge tone={hasPassword ? "soft" : "ink"}>
-                    {hasPassword ? "Enabled" : "Disabled"}
-                  </PillBadge>
-                </div>
-
-                {hasPassword ? (
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (!currentPw) return;
-                      setPwBusy(true);
-                      try {
-                        await postRemovePassword({ password: currentPw });
-                        setCurrentPw("");
-                        toast.success("Password removed", {
-                          description: "Passkeys remain your only sign-in.",
-                        });
-                        profile.refetch();
-                      } catch (err) {
-                        toast.error(
-                          err instanceof Error ? err.message : "Could not remove the password.",
-                        );
-                      } finally {
-                        setPwBusy(false);
-                      }
-                    }}
-                    className="mt-4 space-y-3"
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="current-pw">Current password</Label>
-                      <Input
-                        id="current-pw"
-                        type="password"
-                        value={currentPw}
-                        onChange={(e) => setCurrentPw(e.target.value)}
-                        autoComplete="current-password"
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={pwBusy || !currentPw}
-                    >
-                      {pwBusy ? "Removing…" : "Remove password"}
-                    </Button>
-                  </form>
-                ) : (
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (pw.length < 10) {
-                        toast.error("Use at least 10 characters.");
-                        return;
-                      }
-                      if (pw !== pwConfirm) {
-                        toast.error("Passwords don't match.");
-                        return;
-                      }
-                      setPwBusy(true);
-                      try {
-                        const res = await postSetPassword({ password: pw });
-                        setPw("");
-                        setPwConfirm("");
-                        toast.success("Password set", {
-                          description: "You can now sign in with it as a fallback.",
-                        });
-                        if (res.breachWarning) {
-                          toast.warning("That password appeared in a known breach", {
-                            description: "We saved it, but pick a fresh one when you get a chance.",
-                          });
-                        }
-                        profile.refetch();
-                      } catch (err) {
-                        toast.error(
-                          err instanceof Error ? err.message : "Could not set the password.",
-                        );
-                      } finally {
-                        setPwBusy(false);
-                      }
-                    }}
-                    className="mt-4 space-y-3"
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="new-pw">New password</Label>
-                      <Input
-                        id="new-pw"
-                        type="password"
-                        value={pw}
-                        onChange={(e) => setPw(e.target.value)}
-                        autoComplete="new-password"
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm-pw">Confirm password</Label>
-                      <Input
-                        id="confirm-pw"
-                        type="password"
-                        value={pwConfirm}
-                        onChange={(e) => setPwConfirm(e.target.value)}
-                        autoComplete="new-password"
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-                    <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
-                      Stored as an Argon2id hash only — never in plaintext. Min 10 characters with a
-                      letter and a number.
-                    </p>
-                    <Button
-                      type="submit"
-                      size="sm"
-                      className="w-full"
-                      disabled={pwBusy || !pw || !pwConfirm}
-                    >
-                      {pwBusy ? "Saving…" : "Set password"}
-                    </Button>
-                  </form>
-                )}
               </Panel>
             </Reveal>
 

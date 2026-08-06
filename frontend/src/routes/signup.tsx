@@ -5,15 +5,18 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ClipboardCheck,
   Loader2,
   Mail,
   MailCheck,
   ShieldCheck,
+  Sparkles,
   User,
 } from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
-import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
+import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
+import { NovaBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -47,6 +50,24 @@ export const Route = createFileRoute("/signup")({
 });
 
 type Step = 1 | 2 | 3 | 4;
+
+const signupTips: AuthTip[] = [
+  {
+    icon: <Sparkles className="size-4" />,
+    title: "Two fields, one scan",
+    body: "Name, email and a passkey — that's the whole signup.",
+  },
+  {
+    icon: <ShieldCheck className="size-4" />,
+    title: "Private by design",
+    body: "Your private key never leaves your device's secure chip.",
+  },
+  {
+    icon: <ClipboardCheck className="size-4" />,
+    title: "Recovery you control",
+    body: "10 offline codes are the only backup you'll ever need.",
+  },
+];
 
 function Signup() {
   const navigate = useNavigate();
@@ -153,252 +174,244 @@ function Signup() {
 
   return (
     <NovaBackground>
-      <PageShell className="min-h-[calc(100vh-4rem)]">
-        <header className="flex items-center justify-between py-4">
-          <Logo />
+      <AuthSplit
+        eyebrow="No password required"
+        headline="Two fields. One scan. You're in."
+        subline="We only need a name and an email. Your passkey is created on your device — never on our servers."
+        badge={
           <span className="eyebrow">
             Step {Math.min(step, 3)} of {progressTotal === 4 ? "4" : "3"}
           </span>
-        </header>
+        }
+        tips={signupTips}
+      >
+        <Reveal className="w-full max-w-[30rem]">
+          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-6 shadow-card sm:p-8">
+            {/* progress hairline */}
+            <div className="mb-7 flex gap-1.5">
+              {[1, 2, 3, 4].map((s) => (
+                <span
+                  key={s}
+                  className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                    step >= s ? "bg-lime" : "bg-muted"
+                  }`}
+                />
+              ))}
+            </div>
 
-        <div className="flex flex-col items-center justify-center py-10 sm:py-16">
-          <Reveal className="w-full max-w-[27rem]">
-            <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 shadow-card sm:p-8">
-              {/* progress hairline */}
-              <div className="mb-7 flex gap-1.5">
-                {[1, 2, 3, 4].map((s) => (
-                  <span
-                    key={s}
-                    className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                      step >= s ? "bg-lime" : "bg-muted"
-                    }`}
-                  />
-                ))}
-              </div>
+            {step === 1 ? (
+              <form onSubmit={startSignup} className="space-y-5">
+                <div className="space-y-2">
+                  <PillBadge icon={<ShieldCheck />}>No password required</PillBadge>
+                  <h1 className="pt-2 text-2xl">Open your account</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    We only need a name and an email. We&apos;ll email you a link to prove the
+                    address is yours, then we guide you through backup access, a passkey, and an
+                    account image sequence.
+                  </p>
+                </div>
 
-              {step === 1 ? (
-                <form onSubmit={startSignup} className="space-y-5">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <PillBadge icon={<ShieldCheck />}>No password required</PillBadge>
-                    <h1 className="pt-2 text-2xl">Open your account</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      We only need a name and an email. We&apos;ll email you a link to prove the
-                      address is yours, then we guide you through backup access, a passkey, and an
-                      account image sequence.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full name</Label>
-                      <div className="relative">
-                        <User className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="name"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="h-12 rounded-2xl pl-10"
-                          placeholder="Rohan Patil"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <div className="relative">
-                        <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="email"
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          onKeyDown={keys.onKeyDown}
-                          className="h-12 rounded-2xl pl-10"
-                          placeholder="you@email.com"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Mobile number</Label>
+                    <Label htmlFor="name">Full name</Label>
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        id="phone"
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="h-12 rounded-2xl"
-                        placeholder="+919876543210"
-                        autoComplete="tel"
+                        id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="h-12 rounded-2xl pl-10"
+                        placeholder="Rohan Patil"
                       />
                     </div>
                   </div>
-
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-
-                  <Button type="submit" size="lg" className="w-full" disabled={resending}>
-                    {resending ? "Sending…" : "Continue"} <ArrowRight className="size-4" />
-                  </Button>
-                </form>
-              ) : step === 2 ? (
-                <div className="space-y-6 text-center">
-                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-warning/14 text-[oklch(0.58_0.13_70)]">
-                    <MailCheck className="size-7" />
-                  </span>
                   <div className="space-y-2">
-                    <h1 className="text-2xl">Check your inbox</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      We sent a verification link to{" "}
-                      <span className="font-medium text-ink">{email}</span>. It expires in 15
-                      minutes. Click it, then come back here — we&apos;ll carry on automatically.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    Waiting for you to verify…
-                  </div>
-
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full"
-                    disabled={resending}
-                    onClick={resendEmail}
-                  >
-                    {resending ? "Sending…" : "Re-send the email"}
-                  </Button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep(1);
-                      setError(null);
-                    }}
-                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                  >
-                    ← Use a different email
-                  </button>
-                </div>
-              ) : step === 3 ? (
-                <div className="space-y-6 text-center">
-                  <div className="flex justify-center">
-                    <PasskeyGlyph phase={phase} />
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onKeyDown={keys.onKeyDown}
+                        className="h-12 rounded-2xl pl-10"
+                        placeholder="you@email.com"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <h1 className="text-2xl">Create your passkey</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Your device generates a key pair and keeps the private half in its secure
-                      chip. We only ever see the public half.
-                    </p>
-                  </div>
-
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    disabled={phase === "waiting"}
-                    onClick={createPasskey}
-                  >
-                    {phase === "waiting"
-                      ? "Waiting for your device…"
-                      : "Continue with Face ID / Touch ID"}
-                  </Button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep(2);
-                      setError(null);
-                      setPhase("idle");
-                    }}
-                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                  >
-                    ← Back
-                  </button>
-
-                  {/* Why no password — expandable */}
-                  <button
-                    type="button"
-                    onClick={() => setWhy((v) => !v)}
-                    className="flex w-full items-center justify-between border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-4 text-left text-sm font-medium"
-                  >
-                    Why no password?
-                    <ChevronDown
-                      className={`size-4 transition-transform duration-200 ${why ? "rotate-180" : ""}`}
+                    <Label htmlFor="phone">Mobile number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="h-12 rounded-2xl"
+                      placeholder="+919876543210"
+                      autoComplete="tel"
                     />
-                  </button>
-                  {why ? (
-                    <p className="text-left text-sm leading-relaxed text-muted-foreground">
-                      Passwords get reused, guessed and phished. A passkey can&apos;t be typed into
-                      a fake site — it only works on the real NovaBank domain, and it never leaves
-                      your device.
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="space-y-5 text-center">
-                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-primary">
-                    <Check className="size-7" strokeWidth={2.4} />
-                  </span>
-                  <div className="space-y-2">
-                    <h1 className="text-2xl">Account created</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Save these 10 recovery codes somewhere offline. They&apos;re the only way back
-                      in if you ever lose every device. We don&apos;t store them — this is the only
-                      time you&apos;ll see them.
-                    </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 text-left font-mono text-sm tracking-[0.08em]">
-                    {recoveryCodes.map((c) => (
-                      <span key={c}>{c}</span>
-                    ))}
-                  </div>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => downloadRecoveryCodesPdf(recoveryCodes, email)}
-                  >
-                    Download as PDF
-                  </Button>
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    onClick={() => navigate({ to: "/dashboard" })}
-                  >
-                    I&apos;ve saved these — go to my account <ArrowRight className="size-4" />
-                  </Button>
                 </div>
-              )}
-            </div>
 
-            <p className="mt-5 text-center text-sm text-muted-foreground">
-              Already with us?{" "}
-              <Link
-                to="/login"
-                className="font-semibold text-ink underline-offset-4 hover:underline"
-              >
-                Sign in with a passkey
-              </Link>
-            </p>
-          </Reveal>
-        </div>
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
 
-        <Footer />
-      </PageShell>
+                <Button type="submit" size="lg" className="w-full" disabled={resending}>
+                  {resending ? "Sending…" : "Continue"} <ArrowRight className="size-4" />
+                </Button>
+              </form>
+            ) : step === 2 ? (
+              <div className="space-y-6 text-center">
+                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-warning/14 text-[oklch(0.58_0.13_70)]">
+                  <MailCheck className="size-7" />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="text-2xl">Check your inbox</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    We sent a verification link to{" "}
+                    <span className="font-medium text-ink">{email}</span>. It expires in 15 minutes.
+                    Click it, then come back here — we&apos;ll carry on automatically.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Waiting for you to verify…
+                </div>
+
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full"
+                  disabled={resending}
+                  onClick={resendEmail}
+                >
+                  {resending ? "Sending…" : "Re-send the email"}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1);
+                    setError(null);
+                  }}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                >
+                  ← Use a different email
+                </button>
+              </div>
+            ) : step === 3 ? (
+              <div className="space-y-6 text-center">
+                <div className="flex justify-center">
+                  <PasskeyGlyph phase={phase} />
+                </div>
+                <div className="space-y-2">
+                  <h1 className="text-2xl">Create your passkey</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Your device generates a key pair and keeps the private half in its secure chip.
+                    We only ever see the public half.
+                  </p>
+                </div>
+
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+
+                <Button
+                  size="lg"
+                  className="w-full"
+                  disabled={phase === "waiting"}
+                  onClick={createPasskey}
+                >
+                  {phase === "waiting"
+                    ? "Waiting for your device…"
+                    : "Continue with Face ID / Touch ID"}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(2);
+                    setError(null);
+                    setPhase("idle");
+                  }}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                >
+                  ← Back
+                </button>
+
+                {/* Why no password — expandable */}
+                <button
+                  type="button"
+                  onClick={() => setWhy((v) => !v)}
+                  className="flex w-full items-center justify-between border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-4 text-left text-sm font-medium"
+                >
+                  Why no password?
+                  <ChevronDown
+                    className={`size-4 transition-transform duration-200 ${why ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {why ? (
+                  <p className="text-left text-sm leading-relaxed text-muted-foreground">
+                    Passwords get reused, guessed and phished. A passkey can&apos;t be typed into a
+                    fake site — it only works on the real NovaBank domain, and it never leaves your
+                    device.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-5 text-center">
+                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-primary">
+                  <Check className="size-7" strokeWidth={2.4} />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="text-2xl">Account created</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Save these 10 recovery codes somewhere offline. They&apos;re the only way back
+                    in if you ever lose every device. We don&apos;t store them — this is the only
+                    time you&apos;ll see them.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 text-left font-mono text-sm tracking-[0.08em]">
+                  {recoveryCodes.map((c) => (
+                    <span key={c}>{c}</span>
+                  ))}
+                </div>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => downloadRecoveryCodesPdf(recoveryCodes, email)}
+                >
+                  Download as PDF
+                </Button>
+                <Button size="lg" className="w-full" onClick={() => navigate({ to: "/dashboard" })}>
+                  I&apos;ve saved these — go to my account <ArrowRight className="size-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-5 text-center text-sm text-muted-foreground">
+            Already with us?{" "}
+            <Link to="/login" className="font-semibold text-ink underline-offset-4 hover:underline">
+              Sign in with a passkey
+            </Link>
+          </p>
+        </Reveal>
+      </AuthSplit>
     </NovaBackground>
   );
 }

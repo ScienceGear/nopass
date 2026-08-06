@@ -1,17 +1,25 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { startAuthentication, browserSupportsWebAuthn } from "@simplewebauthn/browser";
-import { ArrowRight, Fingerprint, MailCheck, QrCode, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  Fingerprint,
+  MailCheck,
+  QrCode,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import { Button, PillBadge, RiskBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { ImageChallenge } from "@/components/nova/ImageChallenge";
-import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
+import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
+import { NovaBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   postLoginOptions,
   postLoginVerify,
-  postPasswordLogin,
   postStepUpVerify,
   postImageChallengeSetup,
   type ImageChallenge as ImageChallengeData,
@@ -42,7 +50,25 @@ export const Route = createFileRoute("/login/")({
   }),
   component: LoginPage,
 });
-type Stage = "email" | "passkey" | "otp" | "password" | "challenge";
+type Stage = "email" | "passkey" | "otp" | "challenge";
+
+const loginTips: AuthTip[] = [
+  {
+    icon: <Fingerprint className="size-4" />,
+    title: "A passkey, not a password",
+    body: "Your device signs for you with Face ID, Touch ID or Windows Hello.",
+  },
+  {
+    icon: <MailCheck className="size-4" />,
+    title: "Email codes as a backup",
+    body: "No passkey handy? We email a one-time code to your inbox instead.",
+  },
+  {
+    icon: <ShieldCheck className="size-4" />,
+    title: "Risk-scored in real time",
+    body: "Unusual sign-ins get an extra check — or a friendly block.",
+  },
+];
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -50,15 +76,14 @@ function LoginPage() {
   const { session } = useSession();
   const [stage, setStage] = React.useState<Stage>("email");
   const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [result, setResult] = React.useState<LoginResult | null>(null);
   const [challenge, setChallenge] = React.useState<ImageChallengeData | null>(null);
   const [otp, setOtp] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [showOthers, setShowOthers] = React.useState(false);
   const emailKeys = useKeystrokeCapture();
-  const passwordKeys = useKeystrokeCapture();
   const otpKeys = useKeystrokeCapture();
 
   const goAfterLogin = React.useCallback(() => {
@@ -196,39 +221,6 @@ function LoginPage() {
     }
   }
 
-  async function startPasswordLogin(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!email.includes("@")) {
-      setError("Enter the email you signed up with.");
-      return;
-    }
-    if (!password) {
-      setError("Enter your password.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const keystrokes = passwordKeys.getSamples();
-      const [deviceFingerprint, deviceInfo] = await Promise.all([
-        getDeviceFingerprint(),
-        Promise.resolve(getDeviceInfo()),
-      ]);
-      const res = await postPasswordLogin({
-        email,
-        password,
-        keystrokes,
-        deviceFingerprint,
-        deviceInfo,
-        pasted: passwordKeys.getPasted(),
-      });
-      await handleLoginResult(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
   async function confirmOtp(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\d{6}$/.test(otp)) {
@@ -261,290 +253,282 @@ function LoginPage() {
     }
   }
 
-  /* High risk → full-screen block */
+  /* High risk -> full-screen block */
   if (result?.riskAction === "block") {
     return (
       <NovaBackground>
-        <PageShell className="min-h-[calc(100vh-4rem)]">
-          <header className="py-4">
-            <Logo />
-          </header>
-          <div className="flex min-h-[70vh] items-center justify-center">
-            <Reveal className="w-full max-w-[32rem] text-center">
-              <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-destructive/10 text-destructive">
-                <ShieldAlert className="size-8" />
-              </span>
-              <h1 className="mt-6 text-3xl">We stopped this sign-in</h1>
-              <p className="mx-auto mt-3 max-w-[26rem] text-sm leading-relaxed text-muted-foreground">
-                {result.reason}
-              </p>
-              <div className="mx-auto mt-6 max-w-sm rounded-2xl bg-muted p-4 text-left">
-                <div className="flex items-center justify-between">
-                  <span className="eyebrow">Risk score</span>
-                  <RiskBadge level="high" score={result.riskScore} />
-                </div>
+        <AuthSplit
+          eyebrow="Risk engine"
+          headline="We stopped this sign-in"
+          subline="Our adaptive risk engine flagged this attempt to protect you."
+          badge={
+            <PillBadge tone="white" icon={<ShieldAlert className="size-3.5" />}>
+              Blocked
+            </PillBadge>
+          }
+          tips={loginTips}
+        >
+          <Reveal className="w-full max-w-[30rem] text-center">
+            <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-destructive/10 text-destructive">
+              <ShieldAlert className="size-8" />
+            </span>
+            <h1 className="mt-6 text-3xl">We stopped this sign-in</h1>
+            <p className="mx-auto mt-3 max-w-[26rem] text-sm leading-relaxed text-muted-foreground">
+              {result.reason}
+            </p>
+            <div className="mx-auto mt-6 max-w-sm rounded-2xl bg-muted p-4 text-left">
+              <div className="flex items-center justify-between">
+                <span className="eyebrow">Risk score</span>
+                <RiskBadge level="high" score={result.riskScore} />
               </div>
-              <div className="mt-7 flex flex-col gap-2 sm:flex-row sm:justify-center">
-                <Button variant="outline" size="lg" asChild>
-                  <Link to="/login/approve">Verify another way</Link>
-                </Button>
-              </div>
-            </Reveal>
-          </div>
-        </PageShell>
+            </div>
+            <div className="mt-7 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <Button variant="outline" size="lg" asChild>
+                <Link to="/login/approve">Verify another way</Link>
+              </Button>
+            </div>
+          </Reveal>
+        </AuthSplit>
       </NovaBackground>
     );
   }
 
   return (
     <NovaBackground>
-      <PageShell className="min-h-[calc(100vh-4rem)]">
-        <header className="flex items-center justify-between py-4">
-          <Logo />
-          <PillBadge tone="white" icon={<ShieldCheck />}>
+      <AuthSplit
+        eyebrow="FIDO2 passkeys"
+        headline="Sign in like it's yours -- because it is."
+        subline="One tap with Face ID, Touch ID or Windows Hello. No password, no OTP by default."
+        badge={
+          <PillBadge tone="white" icon={<ShieldCheck className="size-3.5" />}>
             FIDO2 sign-in
           </PillBadge>
-        </header>
-
-        <div className="flex flex-col items-center justify-center py-12 sm:py-20">
-          <Reveal className="w-full max-w-[27rem]">
-            <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 text-center shadow-card sm:p-8">
-              {stage === "email" ? (
-                <form onSubmit={startLogin} className="space-y-6 text-left">
-                  <div className="space-y-2 text-center">
-                    <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-lime-soft text-ink">
-                      <Fingerprint className="size-7" />
-                    </span>
-                    <h1 className="pt-3 text-2xl">Welcome back</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Enter your email and we&apos;ll ask your device to sign the challenge. No
-                      password, ever.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      autoFocus
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onKeyDown={emailKeys.onKeyDown}
-                      placeholder="you@email.com"
-                      className="h-12 rounded-2xl"
-                    />
-                  </div>
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-                  <Button type="submit" size="lg" className="w-full" disabled={busy}>
-                    Continue <ArrowRight className="size-4" />
-                  </Button>
-                  <div className="flex items-center gap-3">
-                    <span className="h-px flex-1 bg-[oklch(0.207_0.014_251_/_0.07)]" />
-                    <span className="text-[0.6875rem] font-mono uppercase tracking-[0.14em] text-muted-foreground">
-                      or
-                    </span>
-                    <span className="h-px flex-1 bg-[oklch(0.207_0.014_251_/_0.07)]" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStage("password");
-                      setError(null);
-                    }}
-                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                  >
-                    Sign in with a password instead
-                  </button>
-                </form>
-              ) : stage === "password" ? (
-                <form onSubmit={startPasswordLogin} className="space-y-6 text-left">
-                  <div className="space-y-2 text-center">
-                    <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-lime-soft text-ink">
-                      <ShieldCheck className="size-7" />
-                    </span>
-                    <h1 className="pt-3 text-2xl">Sign in with your password</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Only used when a passkey isn&apos;t available. Stored as a hash, never
-                      plaintext.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      autoFocus
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@email.com"
-                      className="h-12 rounded-2xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyDown={passwordKeys.onKeyDown}
-                      onPaste={passwordKeys.onPaste}
-                      autoComplete="current-password"
-                      placeholder="••••••••••"
-                      className="h-12 rounded-2xl"
-                    />
-                  </div>
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-                  <Button type="submit" size="lg" className="w-full" disabled={busy}>
-                    {busy ? "Checking…" : "Sign in with password"} <ArrowRight className="size-4" />
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStage("email");
-                      setError(null);
-                    }}
-                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                  >
-                    ← Use a passkey instead
-                  </button>
-                </form>
-              ) : stage === "passkey" ? (
-                <div className="space-y-6">
-                  <div className="flex justify-center">
-                    <PasskeyGlyph phase={phase} />
-                  </div>
-                  <div className="space-y-2">
-                    <h1 className="text-2xl">Confirm with your device</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {phase === "waiting"
-                        ? "Waiting for your device… confirm the prompt on your screen."
-                        : "Your passkey only works on the real NovaBank domain, so a lookalike site can't use it."}
-                    </p>
-                  </div>
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    disabled={phase === "waiting" || busy}
-                    onClick={() => startLogin()}
-                  >
-                    <Fingerprint className="size-[1.05rem]" />
-                    {phase === "waiting" ? "Waiting for your device…" : "Sign in with passkey"}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStage("email");
-                      setError(null);
-                      setPhase("idle");
-                    }}
-                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                  >
-                    ← Use a different email
-                  </button>
-                </div>
-              ) : stage === "challenge" ? (
-                <div className="space-y-6 text-left">
-                  <div className="space-y-2 text-center">
-                    <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-warning/14 text-[oklch(0.58_0.13_70)]">
-                      <ShieldCheck className="size-7" />
-                    </span>
-                    <h1 className="pt-3 text-2xl">One last check</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      We noticed something unusual about this sign-in. Click the objects below in
-                      the order shown to prove it&apos;s you.
-                    </p>
-                  </div>
-                  {result ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="eyebrow">Session risk</span>
-                      <RiskBadge level={result.riskLevel} score={result.riskScore} />
-                    </div>
-                  ) : null}
-                  {challenge ? (
-                    <ImageChallenge
-                      challenge={challenge}
-                      busy={busy}
-                      onSolve={solveChallenge}
-                      onNewChallenge={newChallenge}
-                    />
-                  ) : null}
-                </div>
-              ) : (
-                <form onSubmit={confirmOtp} className="space-y-6">
-                  <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-warning/14 text-[oklch(0.58_0.13_70)]">
-                    <MailCheck className="size-7" />
+        }
+        tips={loginTips}
+      >
+        <Reveal className="w-full max-w-[30rem]">
+          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-6 text-center shadow-card sm:p-8">
+            {stage === "email" ? (
+              <form onSubmit={startLogin} className="space-y-6 text-left">
+                <div className="space-y-2 text-center">
+                  <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-lime-soft text-ink">
+                    <Fingerprint className="size-7" />
                   </span>
-                  <div className="space-y-2">
-                    <h1 className="text-2xl">Confirm it&apos;s you</h1>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {result?.reason ?? ""} We emailed a 6-digit code to your inbox.
-                    </p>
-                  </div>
+                  <h1 className="pt-3 text-2xl">Welcome back</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Enter your email and we&apos;ll ask your device to sign the challenge. No
+                    password, ever.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
                   <Input
+                    id="email"
+                    type="email"
                     autoFocus
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                    onKeyDown={otpKeys.onKeyDown}
-                    placeholder="••••••"
-                    className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={emailKeys.onKeyDown}
+                    placeholder="you@email.com"
+                    className="h-12 rounded-2xl"
                   />
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
-                  <Button type="submit" size="lg" className="w-full" disabled={busy}>
-                    {busy ? "Checking…" : "Confirm and sign in"}
-                  </Button>
-                  {result ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="eyebrow">Session risk</span>
-                      <RiskBadge level={result.riskLevel} score={result.riskScore} />
-                    </div>
-                  ) : null}
-                </form>
-              )}
-            </div>
+                </div>
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+                <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                  Continue <ArrowRight className="size-4" />
+                </Button>
 
-            <p className="mt-5 text-center text-sm text-muted-foreground">
-              New here?{" "}
-              <Link
-                to="/signup"
-                className="font-semibold text-ink underline-offset-4 hover:underline"
-              >
-                Open an account
-              </Link>
-            </p>
-            <p className="mt-3 flex items-center justify-center gap-1.5 text-center">
-              <Link
-                to="/login/approve"
-                className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-              >
-                <QrCode className="size-4" /> Sign in on another device
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </p>
-          </Reveal>
-        </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOthers((v) => !v)}
+                  className="flex w-full items-center justify-between border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-4 text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                >
+                  Other ways to sign in
+                  <ChevronDown
+                    className={`size-4 transition-transform duration-200 ${showOthers ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {showOthers ? (
+                  <div className="space-y-2">
+                    <OtherMethod
+                      label="Email me a code"
+                      hint="No passkey needed — we email a one-time sign-in link."
+                      onClick={() => navigate({ to: "/recover" })}
+                    />
+                    <OtherMethod
+                      label="Recovery code"
+                      hint="Use one of the 10 codes you saved at signup."
+                      onClick={() => navigate({ to: "/recover" })}
+                    />
+                    <OtherMethod
+                      label="Sign in on another device"
+                      hint="Scan a QR code with a device that already has your passkey."
+                      onClick={() => navigate({ to: "/login/approve" })}
+                    />
+                  </div>
+                ) : null}
+              </form>
+            ) : stage === "passkey" ? (
+              <div className="space-y-6">
+                <div className="flex justify-center">
+                  <PasskeyGlyph phase={phase} />
+                </div>
+                <div className="space-y-2">
+                  <h1 className="text-2xl">Confirm with your device</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {phase === "waiting"
+                      ? "Waiting for your device… confirm the prompt on your screen."
+                      : "Your passkey only works on the real NovaBank domain, so a lookalike site can't use it."}
+                  </p>
+                </div>
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+                <Button
+                  size="lg"
+                  className="w-full"
+                  disabled={phase === "waiting" || busy}
+                  onClick={() => startLogin()}
+                >
+                  <Fingerprint className="size-[1.05rem]" />
+                  {phase === "waiting" ? "Waiting for your device…" : "Sign in with passkey"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStage("email");
+                    setError(null);
+                    setPhase("idle");
+                  }}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                >
+                  ← Use a different email
+                </button>
+              </div>
+            ) : stage === "challenge" ? (
+              <div className="space-y-6 text-left">
+                <div className="space-y-2 text-center">
+                  <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-warning/14 text-[oklch(0.58_0.13_70)]">
+                    <ShieldCheck className="size-7" />
+                  </span>
+                  <h1 className="pt-3 text-2xl">One last check</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    We noticed something unusual about this sign-in. Click the objects below in the
+                    order shown to prove it&apos;s you.
+                  </p>
+                </div>
+                {result ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="eyebrow">Session risk</span>
+                    <RiskBadge level={result.riskLevel} score={result.riskScore} />
+                  </div>
+                ) : null}
+                {challenge ? (
+                  <ImageChallenge
+                    challenge={challenge}
+                    busy={busy}
+                    onSolve={solveChallenge}
+                    onNewChallenge={newChallenge}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <form onSubmit={confirmOtp} className="space-y-6">
+                <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-warning/14 text-[oklch(0.58_0.13_70)]">
+                  <MailCheck className="size-7" />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="text-2xl">Confirm it&apos;s you</h1>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {result?.reason ?? ""} We emailed a 6-digit code to your inbox.
+                  </p>
+                </div>
+                <Input
+                  autoFocus
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={otpKeys.onKeyDown}
+                  placeholder="••••••"
+                  className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                />
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+                <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                  {busy ? "Checking…" : "Confirm and sign in"}
+                </Button>
+                {result ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="eyebrow">Session risk</span>
+                    <RiskBadge level={result.riskLevel} score={result.riskScore} />
+                  </div>
+                ) : null}
+              </form>
+            )}
+          </div>
 
-        <Footer />
-      </PageShell>
+          <p className="mt-5 text-center text-sm text-muted-foreground">
+            New here?{" "}
+            <Link
+              to="/signup"
+              className="font-semibold text-ink underline-offset-4 hover:underline"
+            >
+              Open an account
+            </Link>
+          </p>
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-center">
+            <Link
+              to="/login/approve"
+              className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+            >
+              <QrCode className="size-4" /> Sign in on another device
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </p>
+          <p className="mt-2 text-center">
+            <Link
+              to="/recover"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+            >
+              Lost access? Recover your account securely
+            </Link>
+          </p>
+        </Reveal>
+      </AuthSplit>
     </NovaBackground>
+  );
+}
+
+function OtherMethod({
+  label,
+  hint,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[oklch(0.207_0.014_251_/_0.07)] px-4 py-3 text-left transition-colors hover:border-lime/40 hover:bg-lime/5"
+    >
+      <span>
+        <span className="block text-sm font-semibold text-ink">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }

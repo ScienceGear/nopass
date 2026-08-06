@@ -8,17 +8,34 @@ import { useSession, clearSession } from "@/lib/session";
 
 /* ── Logo ───────────────────────────────────────────────────────────────── */
 
-export function Logo({ className }: { className?: string }) {
+export function Logo({
+  className,
+  tone = "dark",
+}: {
+  className?: string;
+  tone?: "dark" | "light";
+}) {
   return (
     <Link to="/" className={cn("group inline-flex items-center gap-2", className)}>
-      <svg viewBox="0 0 24 24" className="size-5 text-ink" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        className={cn("size-5", tone === "dark" ? "text-ink" : "text-lime")}
+        aria-hidden="true"
+      >
         <path
           d="M3 12.4 19.5 4 12.8 12l6.7 8L3 11.6"
           fill="currentColor"
           className="transition-transform duration-300 group-hover:translate-x-0.5"
         />
       </svg>
-      <span className="text-[0.9375rem] font-extrabold tracking-[0.14em] text-ink">NOVABANK</span>
+      <span
+        className={cn(
+          "text-[0.9375rem] font-extrabold tracking-[0.14em]",
+          tone === "dark" ? "text-ink" : "text-white",
+        )}
+      >
+        NOVABANK
+      </span>
     </Link>
   );
 }

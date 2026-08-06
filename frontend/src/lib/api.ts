@@ -57,7 +57,6 @@ export interface UserProfile {
   phone: string | null;
   avatarUrl: string | null;
   memberSince: string;
-  hasPassword: boolean;
 }
 
 export interface AccountSummary {
@@ -121,7 +120,7 @@ export interface Session {
 
 export interface LoginResult {
   stepUpRequired: boolean;
-  method?: "otp_email" | "passkey" | "password" | "image_challenge";
+  method?: "otp_email" | "passkey" | "image_challenge";
   riskScore: number;
   riskLevel: RiskLevel;
   riskAction: RiskAction;
@@ -137,9 +136,8 @@ export interface TransferResult {
   requiresStepUp: boolean;
   intentId: string;
   reference: string;
-  hasPassword?: boolean;
   devOtp?: string;
-  method?: "otp_email" | "password" | "image_challenge";
+  method?: "otp_email" | "image_challenge";
   challenge?: ImageChallenge;
 }
 
@@ -289,7 +287,7 @@ export async function postVerifyEmail(token: string) {
   return res;
 }
 
-export type OnboardingStep = "email_pending" | "password_set" | "passkey_set" | "complete";
+export type OnboardingStep = "email_pending" | "passkey_set" | "complete";
 
 export interface OnboardingStatus {
   email: string;
@@ -300,16 +298,6 @@ export interface OnboardingStatus {
 
 export async function getOnboardingStatus() {
   return apiFetch<OnboardingStatus>("/auth/onboarding/status");
-}
-
-export async function postOnboardingPassword(input: {
-  password: string;
-  keystrokes: { prev: number; curr: number; delta: number }[];
-}) {
-  return apiFetch<{ ok: boolean; breachWarning: boolean; onboardingStep: OnboardingStep }>(
-    "/auth/onboarding/password",
-    { method: "POST", body: JSON.stringify(input) },
-  );
 }
 
 export async function postOnboardingPasskeyOptions() {
@@ -412,12 +400,11 @@ export async function postLoginOptions(input: { email: string }) {
   const res = await apiFetch<{
     options: PublicKeyCredentialRequestOptionsJSON;
     email: string;
-    hasPassword: boolean;
   }>("/auth/login/options", {
     method: "POST",
     body: JSON.stringify({ email: input.email }),
   });
-  return { options: res.options, email: res.email, hasPassword: res.hasPassword };
+  return { options: res.options, email: res.email };
 }
 
 export async function postLoginVerify(input: {
@@ -514,58 +501,85 @@ function defaultReason(score: number, action: string): string {
   return "Known device, usual location, typical hour.";
 }
 
-export async function postPasswordLogin(input: {
+export async function postEmailLoginRequest(input: {
   email: string;
-  password: string;
   keystrokes: { prev: number; curr: number; delta: number }[];
-  deviceFingerprint: string;
-  deviceInfo: string;
-  pasted?: boolean;
-}): Promise<LoginResult> {
-  const res = await apiFetch<{
-    stepUpRequired: boolean;
-    method?: "otp_email" | "passkey" | "image_challenge";
-    riskScore: number;
-    riskAction: string;
-    reason?: string;
-    devOtp?: string;
-    options?: PublicKeyCredentialRequestOptionsJSON;
-    challenge?: ImageChallenge;
-    accessToken?: string;
-    refreshToken?: string;
-    user?: { name: string; email: string };
-  }>("/auth/password/login", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-  return toLoginResult(res);
-}
-
-export async function postSetPassword(input: { password: string; currentPassword?: string }) {
-  return apiFetch<{ ok: boolean; hasPassword: boolean; breachWarning?: boolean }>(
-    "/auth/password/set",
+}) {
+  const [deviceFingerprint, deviceInfo] = await Promise.all([
+    getDeviceFingerprint(),
+    Promise.resolve(getDeviceInfo()),
+  ]);
+  const res = await apiFetch<{ ok: boolean; email: string; devOtp?: string }>(
+    "/auth/login/email-otp",
     {
       method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
     },
   );
+  return res;
 }
 
-export async function postRemovePassword(input: { password: string }) {
-  return apiFetch<{ ok: boolean; hasPassword: boolean }>("/auth/password/remove", {
+export async function postEmailLoginVerify(input: {
+  email: string;
+  otp: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}): Promise<Session> {
+  const [deviceFingerprint, deviceInfo] = await Promise.all([
+    getDeviceFingerprint(),
+    Promise.resolve(getDeviceInfo()),
+  ]);
+  const res = await apiFetch<{
+    verified: boolean;
+    accessToken: string;
+    refreshToken: string;
+    user: { name: string; email: string };
+  }>("/auth/login/email-otp/verify", {
     method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
   });
+  const session = {
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+  };
+  saveSession(session);
+  return session;
+}
+
+export async function postRecoveryLogin(input: {
+  email: string;
+  code: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}): Promise<Session> {
+  const [deviceFingerprint, deviceInfo] = await Promise.all([
+    getDeviceFingerprint(),
+    Promise.resolve(getDeviceInfo()),
+  ]);
+  const res = await apiFetch<{
+    verified: boolean;
+    accessToken: string;
+    refreshToken: string;
+    user: { name: string; email: string };
+  }>("/auth/login/recovery-code", {
+    method: "POST",
+    body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
+  });
+  const session = {
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+  };
+  saveSession(session);
+  return session;
 }
 
 export async function postStepUpVerify(input: {
-  method: "otp_email" | "passkey" | "recovery_code" | "password" | "image_challenge";
+  method: "otp_email" | "passkey" | "recovery_code" | "image_challenge";
   email: string;
   otp?: string;
   code?: string;
-  password?: string;
   credential?: AuthenticationResponseJSON;
   challengeToken?: string;
   clicks?: ChallengeClick[];
@@ -748,8 +762,7 @@ export async function postTransfer(input: {
     stepUpRequired?: boolean;
     transferToken?: string;
     devOtp?: string;
-    hasPassword?: boolean;
-    method?: "otp_email" | "password" | "image_challenge";
+    method?: "otp_email" | "image_challenge";
     challenge?: ImageChallenge;
     transaction?: { id: string };
   }>("/account/transfer", {
@@ -779,7 +792,6 @@ export async function postTransfer(input: {
     intentId: res.transferToken ?? "",
     reference: `NB${Math.floor(Math.random() * 9e7 + 1e7)}`,
     ...(res.devOtp ? { devOtp: res.devOtp } : {}),
-    ...(typeof res.hasPassword === "boolean" ? { hasPassword: res.hasPassword } : {}),
     ...(res.method ? { method: res.method } : {}),
     ...(res.challenge ? { challenge: res.challenge } : {}),
   };
@@ -788,8 +800,7 @@ export async function postTransfer(input: {
 export async function postTransferConfirm(input: {
   transferToken: string;
   otp?: string;
-  password?: string;
-  method?: "otp_email" | "password" | "image_challenge";
+  method?: "otp_email" | "image_challenge";
   challengeToken?: string;
   clicks?: ChallengeClick[];
 }) {
@@ -1004,7 +1015,6 @@ export async function getProfile(): Promise<UserProfile> {
       name: string;
       balance: string;
       createdAt: string;
-      hasPassword: boolean;
       phone: string | null;
     };
   }>("/user/profile", { headers: authHeaders() });
@@ -1019,7 +1029,6 @@ export async function getProfile(): Promise<UserProfile> {
     phone: res.user.phone,
     avatarUrl: null,
     memberSince: res.user.createdAt,
-    hasPassword: res.user.hasPassword,
   };
 }
 

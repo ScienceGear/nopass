@@ -19,6 +19,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -78,6 +79,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecoverRoute = RecoverRouteImport.update({
+  id: '/recover',
+  path: '/recover',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
+  '/recover': typeof RecoverRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
+  '/recover': typeof RecoverRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
+  '/recover': typeof RecoverRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
@@ -193,6 +202,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pricing'
     | '/privacy'
+    | '/recover'
     | '/security'
     | '/signup'
     | '/terms'
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pricing'
     | '/privacy'
+    | '/recover'
     | '/security'
     | '/signup'
     | '/terms'
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pricing'
     | '/privacy'
+    | '/recover'
     | '/security'
     | '/signup'
     | '/terms'
@@ -254,6 +266,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
+  RecoverRoute: typeof RecoverRoute
   SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
@@ -336,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recover': {
+      id: '/recover'
+      path: '/recover'
+      fullPath: '/recover'
+      preLoaderRoute: typeof RecoverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/security': {
       id: '/security'
       path: '/security'
@@ -406,6 +426,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
+  RecoverRoute: RecoverRoute,
   SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,

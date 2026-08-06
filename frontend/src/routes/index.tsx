@@ -101,39 +101,55 @@ function Home() {
         <Navbar />
 
         {/* ── Hero ───────────────────────────────────────────────── */}
-        <section className="relative pb-4 pt-12 text-center sm:pt-20">
-          <Reveal className="flex justify-center">
-            <PillBadge icon={<Leaf />}>Bank without a password</PillBadge>
-          </Reveal>
+        <section className="relative min-h-[28rem] overflow-hidden rounded-[2rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-transparent px-6 py-12 text-left shadow-card sm:min-h-[32rem] sm:px-8 sm:py-16 lg:min-h-[36rem] lg:px-12 lg:py-20">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 -z-10 bg-cover bg-center"
+            style={{
+              backgroundImage: "url('/background.png')",
+              backgroundPosition: "0% 100%",
+              backgroundSize: "112% 124%",
+              backgroundRepeat: "no-repeat",
+              opacity: 0.63,
+              transform: "scale(1.12)",
+              transformOrigin: "center center",
+            }}
+          />
 
-          <Reveal delay={80}>
-            <h1 className="mx-auto mt-6 max-w-[52rem] text-[2.1rem] leading-[1.05] sm:text-6xl lg:text-[4.1rem]">
-              Banking That Can&apos;t
-              <br className="hidden sm:block" /> Be Phished
-            </h1>
-          </Reveal>
+          <div className="relative z-10 max-w-[34rem]">
+            <Reveal className="flex justify-start">
+              <PillBadge icon={<Leaf />}>Bank without a password</PillBadge>
+            </Reveal>
 
-          <Reveal delay={140}>
-            <p className="mx-auto mt-5 max-w-[34rem] text-[0.95rem] leading-relaxed text-muted-foreground sm:text-base">
-              NovaBank replaces passwords with passkeys sealed inside your device, then scores every
-              sign-in and transfer on how it actually behaves — not on what someone typed.
-            </p>
-          </Reveal>
+            <Reveal delay={80}>
+              <h1 className="mt-6 max-w-[44rem] text-[2.1rem] leading-[1.05] sm:text-6xl lg:text-[4.1rem]">
+                Banking That Can&apos;t
+                <br className="hidden sm:block" /> Be Phished
+              </h1>
+            </Reveal>
 
-          <Reveal delay={200}>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button size="lg" className="w-full sm:w-auto" asChild>
-                <Link to="/signup">
-                  <Sparkle className="size-[1.05rem]" /> Open free account
-                </Link>
-              </Button>
-              <Button variant="ghost" size="lg" className="w-full sm:w-auto" asChild>
-                <Link to="/security">
-                  See how it works <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </div>
-          </Reveal>
+            <Reveal delay={140}>
+              <p className="mt-5 max-w-[32rem] text-[0.95rem] leading-relaxed text-muted-foreground sm:text-base">
+                NovaBank replaces passwords with passkeys sealed inside your device, then scores
+                every sign-in and transfer on how it actually behaves — not on what someone typed.
+              </p>
+            </Reveal>
+
+            <Reveal delay={200}>
+              <div className="mt-8 flex flex-col items-start justify-start gap-3 sm:flex-row">
+                <Button size="lg" className="w-full sm:w-auto" asChild>
+                  <Link to="/signup">
+                    <Sparkle className="size-[1.05rem]" /> Open free account
+                  </Link>
+                </Button>
+                <Button variant="ghost" size="lg" className="w-full sm:w-auto" asChild>
+                  <Link to="/security">
+                    See how it works <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </div>
+            </Reveal>
+          </div>
         </section>
 
         {/* ── How it works ───────────────────────────────────────── */}
