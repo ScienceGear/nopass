@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import QRCode from "qrcode";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { prisma } from "../config/db.js";
 import { env } from "../config/env.js";
 import { getRedis } from "../config/redis.js";
@@ -12,26 +12,42 @@ const GRANT_TTL_SECONDS = 300;
 
 export interface QrSessionData {
   token: string;
+  requestSecret: string;
   expiresAt: Date;
   qrImage: string;
 }
 
+const hashRequestSecret = (value: string) => createHash("sha256").update(value).digest("hex");
+
+function requestSecretMatches(expectedHash: string, suppliedSecret: string): boolean {
+  const expected = Buffer.from(expectedHash, "hex");
+  const supplied = Buffer.from(hashRequestSecret(suppliedSecret), "hex");
+  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+}
+
 export async function createQrSession(): Promise<QrSessionData> {
   const token = `qr_${randomBytes(16).toString("base64url")}`;
+  const requestSecret = `qrs_${randomBytes(32).toString("base64url")}`;
   const expiresAt = new Date(Date.now() + QR_TTL_MINUTES * 60 * 1000);
 
   await prisma.qrSession.create({
-    data: { token, status: "pending", expiresAt },
+    data: { token, requestSecretHash: hashRequestSecret(requestSecret), status: "pending", expiresAt },
   });
 
-  const qrData = JSON.stringify({ type: "novabank-login", token, ttl: QR_TTL_MINUTES });
-  const qrImage = await QRCode.toDataURL(qrData, { errorCorrectionLevel: "H", margin: 1 });
-  return { token, expiresAt, qrImage };
+  // A QR scanner must receive a navigable URL, not an application-specific JSON
+  // blob. The token is random, single-purpose, and expires with this session.
+  const approvalUrl = new URL("/login/approve", env.WEBAUTHN_ORIGIN.split(",")[0].trim());
+  approvalUrl.searchParams.set("t", token);
+  const qrImage = await QRCode.toDataURL(approvalUrl.toString(), { errorCorrectionLevel: "H", margin: 1 });
+  return { token, requestSecret, expiresAt, qrImage };
 }
 
-export async function getQrStatus(token: string) {
+export async function getQrStatus(token: string, requestSecret: string) {
   const session = await prisma.qrSession.findUnique({ where: { token } });
   if (!session) throw new AppError(404, "QR session not found.");
+  if (!requestSecretMatches(session.requestSecretHash, requestSecret)) {
+    throw new AppError(403, "This browser cannot access the QR sign-in request.");
+  }
 
   let status = session.status;
   if (status === "pending" && session.expiresAt < new Date()) {
@@ -86,6 +102,10 @@ export function verifyQrGrant(grantToken: string): QrGrantPayload {
 
 export async function findQrSessionById(id: string) {
   return prisma.qrSession.findUnique({ where: { id } });
+}
+
+export function verifyQrRequestSecret(requestSecretHash: string, requestSecret: string): boolean {
+  return requestSecretMatches(requestSecretHash, requestSecret);
 }
 
 export async function attachQrDeviceInfo(token: string, deviceInfo: string, location: string | null) {

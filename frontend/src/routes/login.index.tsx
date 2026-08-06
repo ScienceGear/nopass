@@ -64,8 +64,13 @@ function LoginPage() {
   const goAfterLogin = React.useCallback(() => {
     const dest =
       redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/dashboard";
-    setTimeout(() => navigate({ to: dest as "/dashboard" }), 900);
-  }, [redirect, navigate]);
+    setTimeout(() => {
+      // Redirect targets come only from RequireAuth and are constrained to a
+      // same-origin path. A full navigation preserves query parameters such as
+      // the single-use QR approval token.
+      window.location.assign(dest);
+    }, 900);
+  }, [redirect]);
 
   React.useEffect(() => {
     if (session) goAfterLogin();

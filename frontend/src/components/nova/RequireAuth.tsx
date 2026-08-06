@@ -15,7 +15,7 @@ import { useSession } from "@/lib/session";
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const returnUrl = useRouterState({ select: (s) => s.location.href });
   const { session, ready } = useSession();
   const [redirected, setRedirected] = React.useState(false);
 
@@ -24,10 +24,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       setRedirected(true);
       void router.navigate({
         to: "/login",
-        search: { redirect: pathname },
+        search: { redirect: returnUrl },
       });
     }
-  }, [ready, session, redirected, router, pathname]);
+  }, [ready, session, redirected, router, returnUrl]);
 
   if (!ready || redirected || !session) {
     return (

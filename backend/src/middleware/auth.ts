@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 import { prisma } from "../config/db.js";
 import { verifyAccessToken } from "../utils/crypto.js";
 import { AppError, asyncHandler } from "./errorHandler.js";
+import { env } from "../config/env.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -57,6 +58,15 @@ export const requireCompletedOnboarding: RequestHandler = asyncHandler(async (re
       code: "ONBOARDING_INCOMPLETE",
       currentStep: user.onboardingStep,
     });
+  }
+  next();
+});
+
+/** Restrict bank-operations views to an explicit server-side email allowlist. */
+export const requireAdmin: RequestHandler = asyncHandler(async (req, _res, next) => {
+  const allowed = new Set(env.ADMIN_EMAILS.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+  if (!req.authEmail || !allowed.has(req.authEmail.toLowerCase())) {
+    throw new AppError(403, "Administrator access is required.");
   }
   next();
 });

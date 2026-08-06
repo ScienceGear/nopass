@@ -8,6 +8,7 @@ router.use(requireAuth);
 router.use(requireCompletedOnboarding);
 
 router.get("/activity", security.activity);
+router.get("/snapshot", security.securitySnapshot);
 router.get("/passkeys", security.listPasskeys);
 router.post("/passkeys/register/options", security.addPasskeyOptions);
 router.post("/passkeys/register/verify", security.addPasskeyVerify);

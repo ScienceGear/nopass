@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   deletePasskey,
   getNotificationPrefs,
+  getDevices,
   getPasskeys,
   getProfile,
   getRecoveryCodes,
@@ -20,6 +21,8 @@ import {
   postRegenerateRecoveryCodes,
   postRemovePassword,
   postSetPassword,
+  patchProfile,
+  revokeDevice,
 } from "@/lib/api";
 import { downloadRecoveryCodesPdf } from "@/lib/recoveryPdf";
 import { toast } from "sonner";
@@ -44,6 +47,7 @@ function SecuritySettings() {
   const codes = useQuery({ queryKey: ["recovery"], queryFn: getRecoveryCodes });
   const prefs = useQuery({ queryKey: ["prefs"], queryFn: getNotificationPrefs });
   const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile });
+  const devices = useQuery({ queryKey: ["devices"], queryFn: getDevices });
   const [list, setList] = React.useState<Awaited<ReturnType<typeof getPasskeys>>>([]);
   const [showCodes, setShowCodes] = React.useState(false);
   const [codeList, setCodeList] = React.useState<string[]>([]);
@@ -52,6 +56,9 @@ function SecuritySettings() {
   const [pwConfirm, setPwConfirm] = React.useState("");
   const [currentPw, setCurrentPw] = React.useState("");
   const [pwBusy, setPwBusy] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [profileBusy, setProfileBusy] = React.useState(false);
 
   const hasPassword = profile.data?.hasPassword ?? false;
 
@@ -61,6 +68,12 @@ function SecuritySettings() {
   React.useEffect(() => {
     if (codes.data) setCodeList(codes.data.codes);
   }, [codes.data]);
+  React.useEffect(() => {
+    if (profile.data) {
+      setName(profile.data.name);
+      setPhone(profile.data.phone ?? "");
+    }
+  }, [profile.data]);
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -77,6 +90,60 @@ function SecuritySettings() {
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <Reveal>
+              <Panel>
+                <h2 className="text-lg">Profile</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Keep your contact details current.
+                </p>
+                <form
+                  className="mt-4 space-y-3"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    setProfileBusy(true);
+                    try {
+                      await patchProfile({ name, phone });
+                      await profile.refetch();
+                      toast.success("Profile updated");
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : "Could not update your profile.",
+                      );
+                    } finally {
+                      setProfileBusy(false);
+                    }
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-name">Full name</Label>
+                    <Input
+                      id="profile-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      className="h-11 rounded-2xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-phone">Mobile number</Label>
+                    <Input
+                      id="profile-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      placeholder="+919876543210"
+                      className="h-11 rounded-2xl"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Email changes require a separate verification flow and are not changed from an
+                    active session.
+                  </p>
+                  <Button type="submit" size="sm" className="w-full" disabled={profileBusy}>
+                    {profileBusy ? "Saving…" : "Save profile"}
+                  </Button>
+                </form>
+              </Panel>
+            </Reveal>
             {/* Passkeys */}
             <Reveal>
               <Panel>
@@ -300,15 +367,41 @@ function SecuritySettings() {
               <Panel>
                 <h2 className="text-lg">Trusted devices</h2>
                 <div className="mt-3 hairline-y">
-                  {["iPhone 15 · Pune", "MacBook Air · Pune", "iPad Air · Pune"].map((d) => (
-                    <div key={d} className="flex items-center gap-3 py-4">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted">
-                        <Smartphone className="size-[1.05rem]" />
-                      </span>
-                      <p className="min-w-0 flex-1 truncate text-sm font-semibold">{d}</p>
-                      <PillBadge tone="soft">Trusted</PillBadge>
-                    </div>
-                  ))}
+                  {devices.isPending ? (
+                    <ListSkeleton rows={3} />
+                  ) : devices.data?.length ? (
+                    devices.data.map((device) => (
+                      <div key={device.id} className="flex items-center gap-3 py-4">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted">
+                          <Smartphone className="size-[1.05rem]" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">{device.deviceInfo}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {device.location || "Location unavailable"} · last used{" "}
+                            {fmt(device.lastSeen)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-full px-3 py-1.5 text-[0.8125rem] font-medium text-destructive hover:bg-destructive/10"
+                          onClick={async () => {
+                            await revokeDevice(device.id);
+                            await devices.refetch();
+                            toast.success("Trusted device removed");
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyState
+                      icon={<Smartphone />}
+                      title="No trusted devices"
+                      description="A device appears here after a successful sign-in."
+                    />
+                  )}
                 </div>
               </Panel>
             </Reveal>

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
  * The glossy NovaBank card face. The metallic art behind it is a CSS "brushed
  * silk" shape — drop your own render into the marked image slot to replace it.
  */
-export function BankCard({ className }: { className?: string }) {
+export function BankCard({ className, holderName }: { className?: string; holderName?: string }) {
   return (
     <div className={cn("relative mx-auto w-full max-w-[38rem]", className)}>
       {/* blurred abstract art behind the card */}
@@ -62,7 +62,9 @@ export function BankCard({ className }: { className?: string }) {
               <p className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-ink/55">
                 Passkey secured
               </p>
-              <p className="text-sm font-bold tracking-wide text-ink">ROHAN PATIL</p>
+              <p className="text-sm font-bold tracking-wide text-ink">
+                {holderName?.toUpperCase() || "YOUR NAME"}
+              </p>
             </div>
           </div>
         </div>

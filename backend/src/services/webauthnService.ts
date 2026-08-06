@@ -75,7 +75,7 @@ export async function buildRegistrationOptions(email: string, name: string): Pro
     attestationType: "none",
     authenticatorSelection: {
       residentKey: "preferred",
-      userVerification: "preferred",
+      userVerification: "required",
       authenticatorAttachment: "platform",
     },
     supportedAlgorithmIDs: [-7, -257],
@@ -106,7 +106,7 @@ export async function buildAdditionalRegistrationOptions(
     attestationType: "none",
     authenticatorSelection: {
       residentKey: "preferred",
-      userVerification: "preferred",
+      userVerification: "required",
       authenticatorAttachment: "platform",
     },
     excludeCredentials: user.credentials.map((c) => ({ id: c.id, transports: c.transports })),
@@ -128,7 +128,7 @@ export async function verifyRegistrationResponseCredential(email: string, respon
     expectedChallenge: echoedChallenge,
     expectedOrigin: origins,
     expectedRPID: rpID,
-    requireUserVerification: false,
+    requireUserVerification: true,
   });
   if (!verified || !registrationInfo) throw new AppError(400, "WebAuthn registration failed verification.");
 
@@ -155,7 +155,7 @@ export async function buildAuthenticationOptions(
 ): Promise<PublicKeyCredentialRequestOptionsJSON> {
   const opts = await generateAuthenticationOptions({
     rpID,
-    userVerification: "preferred",
+    userVerification: "required",
     allowCredentials: user.credentials.map((c) => ({
       id: c.id,
       transports: c.transports,
@@ -187,7 +187,7 @@ export async function verifyAuthenticationResponseCredential(
     expectedOrigin: origins,
     expectedRPID: rpID,
     credential,
-    requireUserVerification: false,
+    requireUserVerification: true,
   });
   if (!verified) throw new AppError(400, "WebAuthn authentication failed verification.");
 

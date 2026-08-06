@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import * as React from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -22,8 +23,9 @@ import { TransactionRow } from "@/components/nova/rows";
 import { BalanceSkeleton, ListSkeleton } from "@/components/nova/skeletons";
 import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { RequireAuth } from "@/components/nova/RequireAuth";
-import { getAccountSummary, getTransactions, getActivity } from "@/lib/api";
+import { getAccountSummary, getTransactions, getActivity, getSecuritySnapshot } from "@/lib/api";
 import { formatINR } from "@/lib/api";
+import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -52,10 +54,32 @@ const quickActions = [
 ];
 
 function Dashboard() {
+  const { session } = useSession();
+  const [timeOfDay, setTimeOfDay] = React.useState<{ greeting: string; date: string } | null>(null);
   const account = useQuery({ queryKey: ["account"], queryFn: getAccountSummary });
   const txns = useQuery({ queryKey: ["transactions"], queryFn: getTransactions });
   const activity = useQuery({ queryKey: ["activity"], queryFn: getActivity });
+  const snapshot = useQuery({ queryKey: ["security-snapshot"], queryFn: getSecuritySnapshot });
   const lastLogin = activity.data?.find((e) => e.type === "login");
+  const snapshotLogin = snapshot.data?.lastLogin;
+
+  React.useEffect(() => {
+    const updateTimeOfDay = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+      const date = new Intl.DateTimeFormat(undefined, {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      }).format(now);
+      setTimeOfDay({ greeting, date });
+    };
+
+    updateTimeOfDay();
+    const timer = window.setInterval(updateTimeOfDay, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <RequireAuth>
@@ -65,8 +89,11 @@ function Dashboard() {
 
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pt-8 sm:flex sm:justify-between">
             <div className="min-w-0">
-              <p className="eyebrow">Wednesday, 5 August</p>
-              <h1 className="truncate pt-1 text-[1.75rem] sm:text-4xl">Good morning, Rohan</h1>
+              <p className="eyebrow">{timeOfDay?.date || "Your account overview"}</p>
+              <h1 className="truncate pt-1 text-[1.75rem] sm:text-4xl">
+                {timeOfDay?.greeting || "Welcome"},{" "}
+                {session?.name?.trim().split(/\s+/)[0] || "there"}
+              </h1>
             </div>
             <Button asChild>
               <Link to="/transfer">
@@ -161,7 +188,7 @@ function Dashboard() {
                   <h2 className="text-lg">Security snapshot</h2>
                 </div>
 
-                {activity.isPending || !lastLogin ? (
+                {snapshot.isPending || !snapshotLogin ? (
                   <div className="mt-6 space-y-4">
                     <ListSkeleton rows={2} />
                   </div>
@@ -170,25 +197,38 @@ function Dashboard() {
                     <div className="mt-5 rounded-2xl bg-muted p-4">
                       <p className="text-sm font-semibold">Last login</p>
                       <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <MapPin className="size-3.5" /> {lastLogin.city}, {lastLogin.device}
+                        <MapPin className="size-3.5" />{" "}
+                        {snapshotLogin.location || "Unknown location"}, {snapshotLogin.deviceInfo}
                       </p>
                       <p className="mt-1 font-mono text-[0.6875rem] tracking-[0.06em] text-muted-foreground">
-                        2 hours ago · IP {lastLogin.ipMasked}
+                        {new Date(snapshotLogin.createdAt).toLocaleString()} · IP{" "}
+                        {lastLogin?.ipMasked ?? "hidden"}
                       </p>
                     </div>
 
                     <div className="mt-4 hairline-y">
                       <MetaLine
                         label="Session risk"
-                        value={<RiskBadge level={lastLogin.risk} score={8} />}
+                        value={
+                          <RiskBadge
+                            level={lastLogin?.risk ?? "low"}
+                            score={snapshotLogin.riskScore}
+                          />
+                        }
                       />
-                      <MetaLine label="Active sessions" value="3" />
-                      <MetaLine label="Passkeys" value="3" />
-                      <MetaLine label="Blocked this month" value="1" />
+                      <MetaLine
+                        label="Active sessions"
+                        value={snapshot.data?.activeSessions ?? 0}
+                      />
+                      <MetaLine label="Passkeys" value={snapshot.data?.passkeys ?? 0} />
+                      <MetaLine
+                        label="Blocked this month"
+                        value={snapshot.data?.blockedThisMonth ?? 0}
+                      />
                     </div>
 
                     <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                      {lastLogin.signal}
+                      {lastLogin?.signal ?? "Last sign-in recorded."}
                     </p>
 
                     <div className="mt-5 space-y-2">

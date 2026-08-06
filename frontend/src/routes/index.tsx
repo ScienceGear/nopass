@@ -134,10 +134,6 @@ function Home() {
               </Button>
             </div>
           </Reveal>
-
-          <Reveal delay={260} className="mt-14 sm:mt-20">
-            <BankCard />
-          </Reveal>
         </section>
 
         {/* ── How it works ───────────────────────────────────────── */}

@@ -20,6 +20,7 @@ const envSchema = z.object({
   EMAIL_FROM_NAME: z.string().default("NovaBank Security"),
   EMAIL_FROM_ADDRESS: z.string().default("security@novabank.local"),
   HIBP_API_KEY: z.string().default(""),
+  ADMIN_EMAILS: z.string().default(""),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 

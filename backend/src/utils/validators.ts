@@ -3,6 +3,7 @@ import { z } from "zod";
 export const registerInitiateSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2).max(80),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Use an international phone number, for example +919876543210."),
 });
 
 export const verifyEmailSchema = z.object({
@@ -45,8 +46,8 @@ export const keystrokeSampleSchema = z
 /** Password fallback policy — minimum 10 chars, with letters + digits. */
 export const passwordSchema = z
   .string()
-  .min(10)
-  .max(128)
+  .min(10, "Password must be at least 10 characters long.")
+  .max(128, "Password must be 128 characters or fewer.")
   .refine((v) => /[a-zA-Z]/.test(v) && /\d/.test(v), {
     message: "Password must contain at least one letter and one number.",
   });
@@ -100,6 +101,7 @@ export const qrCreateSchema = z.object({
 export const qrApproveSchema = z.object({
   token: z.string().min(8),
   decision: z.enum(["approve", "deny"]),
+  credential: loginVerifySchema.shape.credential.optional(),
 });
 
 export const stepUpVerifySchema = z.object({

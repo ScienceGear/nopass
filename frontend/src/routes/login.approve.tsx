@@ -1,12 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
+import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser";
 import { Check, MonitorSmartphone, Smartphone } from "lucide-react";
 import { Button, MetaLine, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { RequireAuth } from "@/components/nova/RequireAuth";
 import { Shimmer } from "@/components/nova/skeletons";
-import { getQrStatus, postQrApprove, postQrCreate, postQrExchange } from "@/lib/api";
+import {
+  getQrStatus,
+  postQrApprove,
+  postQrApproveOptions,
+  postQrCreate,
+  postQrExchange,
+} from "@/lib/api";
 import { getDeviceFingerprint, getDeviceInfo } from "@/lib/fingerprint";
 import { toast } from "sonner";
 
@@ -56,9 +63,12 @@ function ApprovePage() {
 
 function DesktopQr() {
   const navigate = useNavigate();
-  const [qr, setQr] = React.useState<{ token: string; expiresAt: string; qrImage: string } | null>(
-    null,
-  );
+  const [qr, setQr] = React.useState<{
+    token: string;
+    requestSecret: string;
+    expiresAt: string;
+    qrImage: string;
+  } | null>(null);
   const [status, setStatus] = React.useState<"pending" | "approved">("pending");
 
   React.useEffect(() => {
@@ -73,7 +83,7 @@ function DesktopQr() {
 
         const poll = async () => {
           if (cancelled) return;
-          const res = await getQrStatus(created.token);
+          const res = await getQrStatus(created.token, created.requestSecret);
           if (cancelled) return;
           if (res.status === "approved" && res.grantToken) {
             setStatus("approved");
@@ -83,6 +93,7 @@ function DesktopQr() {
             ]);
             await postQrExchange({
               grantToken: res.grantToken,
+              requestSecret: created.requestSecret,
               deviceFingerprint,
               deviceInfo,
               keystrokes: [],
@@ -175,8 +186,14 @@ function MobileApprove({ token }: { token: string }) {
     setPhase("waiting");
     setError(null);
     try {
+      if (!browserSupportsWebAuthn())
+        throw new Error(
+          "This browser does not support passkeys. Use a current browser on your phone.",
+        );
+      const options = await postQrApproveOptions();
+      const credential = await startAuthentication({ optionsJSON: options });
       const deviceInfo = getDeviceInfo();
-      await postQrApprove({ token, decision: "approve", deviceInfo });
+      await postQrApprove({ token, decision: "approve", deviceInfo, credential });
       setPhase("success");
       toast.success("Sign-in approved");
     } catch (err) {
@@ -222,7 +239,7 @@ function MobileApprove({ token }: { token: string }) {
           <div className="mt-6 space-y-2">
             <Button size="lg" className="w-full" disabled={phase === "waiting"} onClick={approve}>
               <Smartphone className="size-[1.05rem]" />
-              {phase === "waiting" ? "Waiting for your device…" : "Approve with passkey"}
+              {phase === "waiting" ? "Waiting for your device…" : "Verify and approve"}
             </Button>
             <Button
               variant="ghost"

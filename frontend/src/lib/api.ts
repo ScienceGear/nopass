@@ -54,6 +54,7 @@ export interface UserProfile {
   name: string;
   email: string;
   phoneMasked: string;
+  phone: string | null;
   avatarUrl: string | null;
   memberSince: string;
   hasPassword: boolean;
@@ -259,10 +260,10 @@ function authHeaders(): Record<string, string> {
 
 /* ── Auth ──────────────────────────────────────────────────────────────── */
 
-export async function postRegisterInitiate(input: { email: string; name: string }) {
+export async function postRegisterInitiate(input: { email: string; name: string; phone: string }) {
   const res = await apiFetch<{ ok: boolean; email: string }>("/auth/register/initiate", {
     method: "POST",
-    body: JSON.stringify({ email: input.email, name: input.name }),
+    body: JSON.stringify(input),
   });
   return { ok: res.ok, email: res.email };
 }
@@ -610,30 +611,40 @@ export async function postImageChallengeVerify(challengeToken: string, clicks: C
 /* ── QR cross-device login ─────────────────────────────────────────────── */
 
 export async function postQrCreate() {
-  const res = await apiFetch<{ token: string; expiresAt: string; qrImage: string }>(
-    "/auth/login/qr/create",
-    {
-      method: "POST",
-      body: JSON.stringify({}),
-    },
-  );
-  return { token: res.token, expiresAt: res.expiresAt, qrImage: res.qrImage };
+  const res = await apiFetch<{
+    token: string;
+    requestSecret: string;
+    expiresAt: string;
+    qrImage: string;
+  }>("/auth/login/qr/create", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return {
+    token: res.token,
+    requestSecret: res.requestSecret,
+    expiresAt: res.expiresAt,
+    qrImage: res.qrImage,
+  };
 }
 
-export async function getQrStatus(token: string) {
+export async function getQrStatus(token: string, requestSecret: string) {
   return apiFetch<{
     status: "pending" | "approved" | "denied" | "expired";
     expiresAt: string;
     grantToken: string | null;
     deviceInfo: string | null;
     location: string | null;
-  }>(`/auth/login/qr/status/${encodeURIComponent(token)}`);
+  }>(`/auth/login/qr/status/${encodeURIComponent(token)}`, {
+    headers: { "X-QR-Request-Secret": requestSecret },
+  });
 }
 
 export async function postQrApprove(input: {
   token: string;
   decision: "approve" | "deny";
   deviceInfo: string;
+  credential?: AuthenticationResponseJSON;
 }) {
   return apiFetch<{ status: string }>("/auth/login/qr/approve", {
     method: "POST",
@@ -641,8 +652,17 @@ export async function postQrApprove(input: {
   });
 }
 
+export async function postQrApproveOptions() {
+  const res = await apiFetch<{ options: PublicKeyCredentialRequestOptionsJSON }>(
+    "/auth/login/qr/approve/options",
+    { method: "POST" },
+  );
+  return res.options;
+}
+
 export async function postQrExchange(input: {
   grantToken: string;
+  requestSecret: string;
   deviceFingerprint: string;
   deviceInfo: string;
   keystrokes: { prev: number; curr: number; delta: number }[];
@@ -839,6 +859,22 @@ export async function getActivity(): Promise<ActivityEvent[]> {
   });
 }
 
+export async function getSecuritySnapshot() {
+  return apiFetch<{
+    lastLogin: {
+      deviceInfo: string;
+      location: string | null;
+      ipAddress: string;
+      riskScore: number;
+      createdAt: string;
+      details: string | null;
+    } | null;
+    activeSessions: number;
+    passkeys: number;
+    blockedThisMonth: number;
+  }>("/security/snapshot", { headers: authHeaders() });
+}
+
 function maskIp(): string {
   return "•".repeat(8);
 }
@@ -969,6 +1005,7 @@ export async function getProfile(): Promise<UserProfile> {
       balance: string;
       createdAt: string;
       hasPassword: boolean;
+      phone: string | null;
     };
   }>("/user/profile", { headers: authHeaders() });
 
@@ -976,7 +1013,10 @@ export async function getProfile(): Promise<UserProfile> {
     id: res.user.id,
     name: res.user.name,
     email: res.user.email,
-    phoneMasked: "+91 ••••• ••••",
+    phoneMasked: res.user.phone
+      ? `${res.user.phone.slice(0, 3)} ••••• ${res.user.phone.slice(-4)}`
+      : "Not provided",
+    phone: res.user.phone,
     avatarUrl: null,
     memberSince: res.user.createdAt,
     hasPassword: res.user.hasPassword,
@@ -985,17 +1025,35 @@ export async function getProfile(): Promise<UserProfile> {
 
 export async function patchProfile(input: Partial<UserProfile>): Promise<UserProfile> {
   const res = await apiFetch<{
-    user: { id: string; email: string; name: string };
+    user: { id: string; email: string; name: string; phone: string | null };
   }>("/user/profile", {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ name: input.name }),
+    body: JSON.stringify({ name: input.name, phone: input.phone }),
   });
   const current = getStoredSession();
   if (current?.email === res.user.email) {
     saveSession({ ...current, name: res.user.name });
   }
   return { ...(await getProfile()) };
+}
+
+export async function getAdminSecurityOverview() {
+  return apiFetch<{
+    totals: { users: number; activeSessions: number; riskyEvents: number; blockedEvents: number };
+    events: {
+      id: string;
+      at: string;
+      user: { id: string; name: string; email: string; phone: string | null };
+      type: string;
+      device: string;
+      ipAddress: string;
+      location: string | null;
+      riskScore: number;
+      riskAction: string;
+      details: string | null;
+    }[];
+  }>("/admin/security-overview", { headers: authHeaders() });
 }
 
 /* ── Session helpers for the UI ────────────────────────────────────────── */

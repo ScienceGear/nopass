@@ -36,6 +36,7 @@ router.post("/image-challenge/verify", authLimiter, auth.verifyImageChallengeRou
 // QR cross-device login
 router.post("/login/qr/create", authLimiter, auth.qrCreate);
 router.get("/login/qr/status/:token", auth.qrStatus);
+router.post("/login/qr/approve/options", authLimiter, requireAuth, auth.qrApproveOptions);
 router.post("/login/qr/approve", requireAuth, auth.qrApprove);
 router.post("/login/qr/exchange", authLimiter, auth.qrExchange);
 

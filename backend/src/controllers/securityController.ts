@@ -31,6 +31,24 @@ export const revokeAllSessions: RequestHandler = asyncHandler(async (req, res) =
   res.json({ revoked: result.count });
 });
 
+export const securitySnapshot: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const [lastLogin, activeSessions, passkeys, blockedThisMonth] = await Promise.all([
+    prisma.loginHistory.findFirst({
+      where: { userId: req.userId, eventType: "login" },
+      orderBy: { createdAt: "desc" },
+      select: { deviceInfo: true, location: true, ipAddress: true, riskScore: true, createdAt: true, details: true },
+    }),
+    prisma.session.count({ where: { userId: req.userId, revoked: false, expiresAt: { gt: new Date() } } }),
+    prisma.credential.count({ where: { userId: req.userId } }),
+    prisma.loginHistory.count({ where: { userId: req.userId, riskAction: "block", createdAt: { gte: monthStart } } }),
+  ]);
+  res.json({ lastLogin, activeSessions, passkeys, blockedThisMonth });
+});
+
 // ---------------------------------------------------------------------------
 // SECURITY ACTIVITY FEED
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ import {
   createQrSession,
   findQrSessionById,
   getQrStatus,
+  verifyQrRequestSecret,
   verifyQrGrant,
 } from "../services/qrService.js";
 import {
@@ -165,7 +166,7 @@ async function completeLogin(
 // ---------------------------------------------------------------------------
 
 export const registerInitiate: RequestHandler = asyncHandler(async (req, res) => {
-  const { email, name } = registerInitiateSchema.parse(req.body);
+  const { email, name, phone } = registerInitiateSchema.parse(req.body);
   const normalizedEmail = email.trim().toLowerCase();
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -177,6 +178,7 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
       data: {
         email: normalizedEmail,
         name: name.trim(),
+        phone,
         keystrokeProfile: { create: { transitions: "{}", sampleCount: 0 } },
       },
     });
@@ -184,7 +186,7 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
 
   const token = randomToken("ve", 18);
   await prisma.emailVerificationToken.deleteMany({ where: { userId: existing?.id ?? "" } });
-  const pending = await prisma.user.findUniqueOrThrow({ where: { email: normalizedEmail } });
+  const pending = await prisma.user.update({ where: { email: normalizedEmail }, data: { name: name.trim(), phone } });
   await prisma.emailVerificationToken.upsert({
     where: { userId: pending.id },
     create: { userId: pending.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
@@ -874,31 +876,73 @@ export const qrCreate: RequestHandler = asyncHandler(async (_req, res) => {
 export const qrStatus: RequestHandler = asyncHandler(async (req, res) => {
   const token = req.params.token as string;
   if (!token) throw new AppError(400, "Missing QR token.");
-  const status = await getQrStatus(token);
+  const requestSecret = req.get("X-QR-Request-Secret");
+  if (!requestSecret) throw new AppError(400, "Missing QR request secret.");
+  const status = await getQrStatus(token, requestSecret);
   res.json(status);
 });
 
-export const qrApprove: RequestHandler = asyncHandler(async (req, res) => {
-  const { token, decision } = qrApproveSchema.parse(req.body);
+export const qrApproveOptions: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "You must be signed in to approve a login.");
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, include: { credentials: true } });
+  if (!user || user.onboardingStep !== "complete") throw new AppError(403, "Complete account setup before approving a sign-in.");
+
+  const credentials = buildUserCredentialsFromDb(user.credentials);
+  if (credentials.length === 0) throw new AppError(403, "No passkeys are available to approve this sign-in.");
+  const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials });
+  res.json({ options });
+});
+
+export const qrApprove: RequestHandler = asyncHandler(async (req, res) => {
+  const { token, decision, credential } = qrApproveSchema.parse(req.body);
+  if (!req.userId) throw new AppError(401, "You must be signed in to approve a login.");
+  if (decision === "approve") {
+    if (!credential) throw new AppError(400, "Confirm with your passkey before approving this sign-in.");
+    const user = await prisma.user.findUnique({ where: { id: req.userId }, include: { credentials: true } });
+    if (!user) throw new AppError(404, "User not found.");
+    const credentialRecord = user.credentials.find((item) => item.credentialId === credential.id);
+    if (!credentialRecord) throw new AppError(403, "This passkey does not belong to the signed-in account.");
+    const verified = await verifyAuthenticationResponseCredential(user.email, credential as never, {
+      id: credentialRecord.credentialId,
+      publicKey: credentialRecord.publicKey,
+      counter: credentialRecord.counter,
+      transports: credentialRecord.transports as AuthenticatorTransportFuture[],
+    });
+    await prisma.credential.update({
+      where: { id: credentialRecord.id },
+      data: { counter: verified.newCounter, lastUsedAt: new Date() },
+    });
+  }
   await attachQrDeviceInfo(token, req.body.deviceInfo ?? "Unknown device", req.body.location ?? null);
   const result = await approveQrSession(token, req.userId, decision);
   res.json(result);
 });
 
 export const qrExchange: RequestHandler = asyncHandler(async (req, res) => {
-  const { grantToken, deviceFingerprint, deviceInfo, keystrokes } = req.body as {
+  const { grantToken, requestSecret, deviceFingerprint, deviceInfo, keystrokes } = req.body as {
     grantToken: string;
+    requestSecret: string;
     deviceFingerprint: string;
     deviceInfo: string;
     keystrokes?: { prev: number; curr: number; delta: number }[];
   };
   if (!grantToken) throw new AppError(400, "Missing grant token.");
+  if (!requestSecret) throw new AppError(400, "Missing QR request secret.");
   if (!deviceFingerprint || !deviceInfo) throw new AppError(400, "Device details required.");
 
   const payload = verifyQrGrant(grantToken);
   const session = await findQrSessionById(payload.sub);
   if (!session || session.status !== "approved") throw new AppError(401, "Grant expired or not approved.");
+  if (!requestSecret || !verifyQrRequestSecret(session.requestSecretHash, requestSecret)) {
+    throw new AppError(403, "This browser cannot exchange the QR approval.");
+  }
+
+  const claimed = await prisma.qrSession.updateMany({
+    where: { id: session.id, status: "approved" },
+    data: { status: "exchanged" },
+  });
+  if (claimed.count !== 1) throw new AppError(401, "This QR approval has already been used.");
+  await getRedis().del(`qr:grant:${session.token}`);
 
   const user = await prisma.user.findUnique({ where: { id: session.userId ?? "" } });
   if (!user) throw new AppError(404, "User not found.");

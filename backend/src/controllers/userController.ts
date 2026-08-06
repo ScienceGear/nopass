@@ -17,6 +17,7 @@ export const getProfile: RequestHandler = asyncHandler(async (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
+      phone: user.phone,
       balance: user.balance.toString(),
       createdAt: user.createdAt,
       hasPassword: user.passwordHash != null,
@@ -27,14 +28,15 @@ export const getProfile: RequestHandler = asyncHandler(async (req, res) => {
 
 const updateProfileSchema = z.object({
   name: z.string().min(2).max(80).optional(),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/).optional(),
 });
 
 export const updateProfile: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "Not authenticated.");
-  const { name } = updateProfileSchema.parse(req.body);
+  const { name, phone } = updateProfileSchema.parse(req.body);
   const user = await prisma.user.update({
     where: { id: req.userId },
-    data: { ...(name ? { name } : {}) },
+    data: { ...(name ? { name } : {}), ...(phone ? { phone } : {}) },
   });
-  res.json({ user: { id: user.id, email: user.email, name: user.name } });
+  res.json({ user: { id: user.id, email: user.email, name: user.name, phone: user.phone } });
 });

@@ -14,6 +14,7 @@ model User {
   id            String   @id @default(uuid())
   email         String   @unique
   name          String
+  phone         String?
   balance       Decimal  @default(500000) @db.Decimal(12, 2)
   passwordHash  String? // argon2id, set only if the user opts into the password fallback
   emailVerified Boolean  @default(false) // gate: passkeys can only be registered after email verification
@@ -133,6 +134,7 @@ model OtpCode {
 model QrSession {
   id         String   @id @default(uuid())
   token      String   @unique
+  requestSecretHash String
   userId     String?
   status     String // "pending", "approved", "denied", "expired"
   deviceInfo String?

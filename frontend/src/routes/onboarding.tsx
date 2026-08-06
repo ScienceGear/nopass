@@ -79,6 +79,18 @@ function Onboarding() {
       setError("Passwords do not match.");
       return;
     }
+    if (password.length < 10) {
+      setError("Your backup password must be at least 10 characters long.");
+      return;
+    }
+    if (password.length > 128) {
+      setError("Your backup password must be 128 characters or fewer.");
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      setError("Your backup password must include at least one letter and one number.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

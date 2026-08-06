@@ -100,14 +100,23 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
   if (!user) throw new AppError(404, "User not found.");
   if (Number(user.balance) < amount) throw new AppError(400, "Insufficient balance.");
 
-  const transferToken = `tf_${randomUUID()}`;
-  const payload = JSON.stringify({ userId: req.userId, recipient, amount, note: note ?? null });
-  await getRedis().set(`transfer:${transferToken}`, payload, "EX", TRANSFER_TOKEN_TTL);
-
   const ip = req.ip ?? "unknown";
   const ctx: RiskContextInput = { email: user.email, deviceFingerprint, deviceInfo, keystrokes };
   const signals = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk({ ...signals, amountRisk: amountRisk(amount) });
+  const transferToken = `tf_${randomUUID()}`;
+  const payload = JSON.stringify({
+    userId: req.userId,
+    recipient,
+    amount,
+    note: note ?? null,
+    deviceInfo,
+    ip,
+    location: signals.location,
+    riskScore: assessment.score,
+    riskAction: assessment.action,
+  });
+  await getRedis().set(`transfer:${transferToken}`, payload, "EX", TRANSFER_TOKEN_TTL);
 
   await prisma.loginHistory.create({
     data: {
@@ -162,7 +171,13 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
     });
   }
 
-  const tx = await executeTransfer(user.id, recipient, amount, note);
+  const tx = await executeTransfer(user.id, recipient, amount, note, {
+    deviceInfo,
+    ip,
+    location: signals.location,
+    riskScore: assessment.score,
+    riskAction: assessment.action,
+  });
   await getRedis().del(`transfer:${transferToken}`);
   return res.json({ executed: true, transaction: tx });
 });
@@ -180,7 +195,10 @@ export const transferConfirm: RequestHandler = asyncHandler(async (req, res) => 
 
   const raw = await getRedis().get(`transfer:${transferToken}`);
   if (!raw) throw new AppError(410, "Transfer request expired or already executed.");
-  const data = JSON.parse(raw) as { userId: string; recipient: string; amount: number; note: string | null };
+  const data = JSON.parse(raw) as {
+    userId: string; recipient: string; amount: number; note: string | null;
+    deviceInfo: string; ip: string; location: string | null; riskScore: number; riskAction: string;
+  };
 
   const user = await prisma.user.findUnique({ where: { id: data.userId } });
   if (!user) throw new AppError(404, "User not found.");
@@ -210,12 +228,18 @@ export const transferConfirm: RequestHandler = asyncHandler(async (req, res) => 
   }
   if (!ok) throw new AppError(401, "Invalid or expired confirmation.");
 
-  const tx = await executeTransfer(data.userId, data.recipient, data.amount, data.note);
+  const tx = await executeTransfer(data.userId, data.recipient, data.amount, data.note, data);
   await getRedis().del(`transfer:${transferToken}`);
   res.json({ executed: true, transaction: tx });
 });
 
-async function executeTransfer(userId: string, recipient: string, amount: number, note?: string | null) {
+async function executeTransfer(
+  userId: string,
+  recipient: string,
+  amount: number,
+  note: string | null | undefined,
+  context: { deviceInfo: string; ip: string; location: string | null; riskScore: number; riskAction: string },
+) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user || Number(user.balance) < amount) throw new AppError(400, "Insufficient balance.");
@@ -239,11 +263,12 @@ async function executeTransfer(userId: string, recipient: string, amount: number
       data: {
         userId,
         eventType: "transfer",
-        deviceInfo: "NovaBank Web",
-        ipAddress: "local",
-        riskScore: 0,
-        riskAction: "allow",
-        details: JSON.stringify({ recipient, amount }),
+        deviceInfo: context.deviceInfo,
+        ipAddress: context.ip,
+        location: context.location,
+        riskScore: context.riskScore,
+        riskAction: context.riskAction,
+        details: JSON.stringify({ recipient, amount, kind: "transfer_completed" }),
       },
     });
 

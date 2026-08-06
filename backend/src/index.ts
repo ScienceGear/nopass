@@ -11,6 +11,7 @@ import authRoutes from "./routes/auth.js";
 import accountRoutes from "./routes/account.js";
 import securityRoutes from "./routes/security.js";
 import userRoutes from "./routes/user.js";
+import adminRoutes from "./routes/admin.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -77,6 +78,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/account", accountRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

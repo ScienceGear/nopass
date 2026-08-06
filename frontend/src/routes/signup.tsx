@@ -52,8 +52,9 @@ function Signup() {
   const navigate = useNavigate();
   const { session } = useSession();
   const [step, setStep] = React.useState<Step>(1);
-  const [name, setName] = React.useState("Rohan Patil");
-  const [email, setEmail] = React.useState("rohan.patil@hey.com");
+  const [name, setName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [phone, setPhone] = React.useState("");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [error, setError] = React.useState<string | null>(null);
   const [why, setWhy] = React.useState(false);
@@ -92,14 +93,14 @@ function Signup() {
 
   async function startSignup(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !email.includes("@")) {
-      setError("Enter your full name and a valid email.");
+    if (!name.trim() || !email.includes("@") || !/^\+[1-9]\d{7,14}$/.test(phone)) {
+      setError("Enter your full name, a valid email, and phone number with country code.");
       return;
     }
     setError(null);
     setResending(true);
     try {
-      await postRegisterInitiate({ name, email });
+      await postRegisterInitiate({ name, email, phone });
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start signup.");
@@ -112,7 +113,7 @@ function Signup() {
     setError(null);
     setResending(true);
     try {
-      await postRegisterInitiate({ name, email });
+      await postRegisterInitiate({ name, email, phone });
       toast.success("Email sent", { description: `A fresh link is on its way to ${email}.` });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the email.");
@@ -215,6 +216,18 @@ function Signup() {
                           placeholder="you@email.com"
                         />
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Mobile number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="h-12 rounded-2xl"
+                        placeholder="+919876543210"
+                        autoComplete="tel"
+                      />
                     </div>
                   </div>
 
