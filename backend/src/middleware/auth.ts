@@ -46,3 +46,17 @@ export const optionalAuth: RequestHandler = asyncHandler(async (req, _res, next)
   }
   next();
 });
+
+/** Prevent partially configured accounts from accessing banking data or security settings. */
+export const requireCompletedOnboarding: RequestHandler = asyncHandler(async (req, _res, next) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { onboardingStep: true } });
+  if (!user) throw new AppError(401, "User no longer exists.");
+  if (user.onboardingStep !== "complete") {
+    throw new AppError(409, "Finish account setup before accessing your account.", {
+      code: "ONBOARDING_INCOMPLETE",
+      currentStep: user.onboardingStep,
+    });
+  }
+  next();
+});

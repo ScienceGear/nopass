@@ -1,10 +1,11 @@
 import { Router } from "express";
 import * as security from "../controllers/securityController.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireCompletedOnboarding } from "../middleware/auth.js";
 
 const router = Router();
 
 router.use(requireAuth);
+router.use(requireCompletedOnboarding);
 
 router.get("/activity", security.activity);
 router.get("/passkeys", security.listPasskeys);

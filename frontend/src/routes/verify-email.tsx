@@ -44,6 +44,7 @@ function VerifyEmail() {
         if (cancelled) return;
         setStatus("verified");
         toast.success("Email verified", { description: `Thanks — ${res.email} is confirmed.` });
+        void navigate({ to: "/onboarding" });
       } catch (err) {
         if (cancelled) return;
         setStatus("failed");
@@ -53,7 +54,7 @@ function VerifyEmail() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, navigate]);
 
   return (
     <NovaBackground>
@@ -82,12 +83,16 @@ function VerifyEmail() {
                   <div className="space-y-2">
                     <h1 className="text-2xl">Email verified</h1>
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      Your address is confirmed. Head back to the signup page to create your passkey
-                      — it should continue automatically.
+                      Your address is confirmed. We&apos;re taking you through the final security
+                      setup.
                     </p>
                   </div>
-                  <Button size="lg" className="w-full" onClick={() => navigate({ to: "/signup" })}>
-                    Continue to signup <ArrowRight className="size-4" />
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={() => navigate({ to: "/onboarding" })}
+                  >
+                    Continue setup <ArrowRight className="size-4" />
                   </Button>
                 </div>
               ) : (

@@ -9,8 +9,16 @@ const router = Router();
 router.post("/register/initiate", authLimiter, auth.registerInitiate);
 router.post("/register/verify-email", otpLimiter, auth.verifyEmail);
 router.post("/register/status", authLimiter, auth.registerStatus);
-router.post("/register/options", authLimiter, auth.registerOptions);
-router.post("/register/verify", authLimiter, auth.registerVerify);
+router.post("/register/options", authLimiter, requireAuth, auth.registerOptions);
+router.post("/register/verify", authLimiter, requireAuth, auth.registerVerify);
+
+// Authenticated, strictly ordered onboarding after email verification.
+router.get("/onboarding/status", requireAuth, auth.onboardingStatus);
+router.post("/onboarding/password", authLimiter, requireAuth, auth.onboardingSetPassword);
+router.post("/onboarding/passkey/options", authLimiter, requireAuth, auth.onboardingPasskeyOptions);
+router.post("/onboarding/passkey/verify", authLimiter, requireAuth, auth.onboardingPasskeyVerify);
+router.get("/onboarding/image-challenge/pool", requireAuth, auth.onboardingImagePool);
+router.post("/onboarding/image-challenge/setup", authLimiter, requireAuth, auth.onboardingImageSetup);
 
 // Authentication
 router.post("/login/options", authLimiter, auth.loginOptions);

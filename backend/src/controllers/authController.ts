@@ -19,7 +19,12 @@ import {
   getQrStatus,
   verifyQrGrant,
 } from "../services/qrService.js";
-import { createImageChallenge, verifyImageChallenge } from "../services/imageChallengeService.js";
+import {
+  createImageChallenge,
+  getImageSetupPool,
+  isValidImageSetupSequence,
+  verifyImageChallenge,
+} from "../services/imageChallengeService.js";
 import type { AuthenticatorTransportFuture, RegistrationResponseJSON } from "@simplewebauthn/types";
 import { evaluateRisk } from "../services/riskEngine.js";
 import { assessContext, type RiskContextInput } from "../services/riskContextService.js";
@@ -54,6 +59,7 @@ import {
   stepUpVerifySchema,
   verifyEmailSchema,
   imageChallengeSetupSchema,
+  onboardingImageSequenceSchema,
 } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
 
@@ -63,6 +69,26 @@ const VERIFY_TTL_MS = 15 * 60 * 1000;
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 type LoginContext = RiskContextInput;
+type OnboardingStep = "email_pending" | "password_set" | "passkey_set" | "complete";
+
+const onboardingOrder: OnboardingStep[] = ["email_pending", "password_set", "passkey_set", "complete"];
+
+async function requireOnboardingStep(userId: string | undefined, expected: OnboardingStep) {
+  if (!userId) throw new AppError(401, "Not authenticated.");
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { credentials: true } });
+  if (!user) throw new AppError(404, "User not found.");
+  if (!user.emailVerified) throw new AppError(403, "Verify your email before continuing.", { code: "EMAIL_UNVERIFIED" });
+  if (user.onboardingStep !== expected) {
+    const current = user.onboardingStep as OnboardingStep;
+    const currentIndex = onboardingOrder.indexOf(current);
+    const expectedIndex = onboardingOrder.indexOf(expected);
+    if (currentIndex > expectedIndex) {
+      throw new AppError(409, "This onboarding step is already complete.", { code: "ONBOARDING_STEP_COMPLETE", currentStep: current });
+    }
+    throw new AppError(409, "Complete the previous onboarding step first.", { code: "ONBOARDING_INCOMPLETE", currentStep: current });
+  }
+  return user;
+}
 
 async function completeLogin(
   user: { id: string; email: string; name: string },
@@ -203,7 +229,153 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
   }
 
   await prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } });
-  res.json({ ok: true, email: record.user.email });
+  const accessToken = signAccessToken({ sub: record.user.id, email: record.user.email });
+  const refreshToken = signRefreshToken({ sub: record.user.id, email: record.user.email });
+  await prisma.session.create({
+    data: {
+      userId: record.user.id,
+      refreshToken: sha256(refreshToken),
+      deviceInfo: "Onboarding verification",
+      ipAddress: req.ip ?? "unknown",
+      riskScore: 0,
+      expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
+    },
+  });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: record.userId } });
+  res.json({
+    ok: true,
+    email: user.email,
+    user: { id: user.id, email: user.email, name: user.name },
+    accessToken,
+    refreshToken,
+    onboardingStep: user.onboardingStep,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ONBOARDING STATE MACHINE
+// ---------------------------------------------------------------------------
+
+export const onboardingStatus: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) throw new AppError(404, "User not found.");
+  res.json({
+    email: user.email,
+    name: user.name,
+    emailVerified: user.emailVerified,
+    onboardingStep: user.onboardingStep,
+  });
+});
+
+export const onboardingSetPassword: RequestHandler = asyncHandler(async (req, res) => {
+  const user = await requireOnboardingStep(req.userId, "email_pending");
+  const { password, keystrokes } = passwordSetSchema.parse(req.body);
+  let breachWarning = false;
+  if (env.HIBP_API_KEY) {
+    const count = await checkPasswordBreach(password);
+    breachWarning = count !== null && count > 0;
+  }
+
+  const passwordHash = await hashPassword(password);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash, onboardingStep: "password_set" } }),
+    prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        eventType: "alert",
+        deviceInfo: "Onboarding",
+        ipAddress: req.ip ?? "unknown",
+        riskScore: 0,
+        riskAction: "allow",
+        details: JSON.stringify({ kind: "backup_password_set", breached: breachWarning }),
+      },
+    }),
+  ]);
+
+  if (keystrokes && keystrokes.length > 3) {
+    const profileRow = await prisma.keystrokeProfile.findUnique({ where: { userId: user.id } });
+    const profile: KeystrokeProfile = profileRow?.transitions
+      ? (JSON.parse(profileRow.transitions) as KeystrokeProfile)
+      : emptyProfile();
+    const merged = mergeSample(profile, {
+      transitions: keystrokes.map((sample) => [sample.prev, sample.curr] as [number, number]),
+      timings: keystrokes.map((sample) => sample.delta),
+    });
+    const sampleCount = Object.values(merged).reduce((total, sample) => total + sample.count, 0);
+    await prisma.keystrokeProfile.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, transitions: JSON.stringify(merged), sampleCount },
+      update: { transitions: JSON.stringify(merged), sampleCount },
+    });
+  }
+
+  res.json({ ok: true, breachWarning, onboardingStep: "password_set" });
+});
+
+export const onboardingPasskeyOptions: RequestHandler = asyncHandler(async (req, res) => {
+  const user = await requireOnboardingStep(req.userId, "password_set");
+  const options = await buildRegistrationOptions(user.email, user.name);
+  res.json({ options });
+});
+
+export const onboardingPasskeyVerify: RequestHandler = asyncHandler(async (req, res) => {
+  const user = await requireOnboardingStep(req.userId, "password_set");
+  const { credential, deviceFingerprint, deviceInfo } = registerVerifySchema
+    .pick({ credential: true, deviceFingerprint: true, deviceInfo: true })
+    .parse(req.body);
+  const result = await verifyRegistrationResponseCredential(user.email, credential as unknown as RegistrationResponseJSON);
+  await prisma.credential.create({
+    data: {
+      userId: user.id,
+      credentialId: result.credential.id,
+      publicKey: Buffer.from(result.credential.publicKey),
+      counter: result.credential.counter,
+      deviceType: result.deviceType,
+      backedUp: result.backedUp,
+      transports: result.credential.transports as string[],
+      nickname: "Primary Passkey",
+    },
+  });
+  const geo = await geoFromIp(req.ip ?? "unknown");
+  await markDeviceTrusted({
+    userId: user.id,
+    rawFingerprint: deviceFingerprint,
+    deviceInfo,
+    ipAddress: req.ip ?? "unknown",
+    location: formatLocation(geo),
+  });
+  const { codes, hashes } = await generateRecoveryCodes(10);
+  await prisma.$transaction([
+    prisma.recoveryCode.createMany({ data: hashes.map((codeHash) => ({ userId: user.id, codeHash })) }),
+    prisma.user.update({ where: { id: user.id }, data: { onboardingStep: "passkey_set" } }),
+  ]);
+  res.json({ ok: true, recoveryCodes: codes, onboardingStep: "passkey_set" });
+});
+
+export const onboardingImagePool: RequestHandler = asyncHandler(async (req, res) => {
+  await requireOnboardingStep(req.userId, "passkey_set");
+  res.json({ pool: getImageSetupPool() });
+});
+
+export const onboardingImageSetup: RequestHandler = asyncHandler(async (req, res) => {
+  const user = await requireOnboardingStep(req.userId, "passkey_set");
+  const { sequence } = onboardingImageSequenceSchema.parse(req.body);
+  if (!isValidImageSetupSequence(sequence)) {
+    throw new AppError(400, "Choose two to four different objects on the same image.");
+  }
+  await prisma.$transaction([
+    prisma.imageChallengeSetup.create({
+      data: {
+        userId: user.id,
+        sequence: JSON.stringify(sequence),
+        verified: true,
+        expiresAt: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000),
+      },
+    }),
+    prisma.user.update({ where: { id: user.id }, data: { onboardingStep: "complete" } }),
+  ]);
+  res.json({ ok: true, onboardingStep: "complete" });
 });
 
 export const registerStatus: RequestHandler = asyncHandler(async (req, res) => {
@@ -218,6 +390,12 @@ export const registerOptions: RequestHandler = asyncHandler(async (req, res) => 
   const user = await prisma.user.findUnique({ where: { email: normalizedEmail }, include: { credentials: true } });
   if (!user || !user.emailVerified) {
     throw new AppError(403, "Verify your email first — we emailed you a link. Check your inbox.", { code: "EMAIL_UNVERIFIED" });
+  }
+  if (user.onboardingStep !== "password_set" || req.userId !== user.id) {
+    throw new AppError(409, "Continue registration through the secure onboarding flow.", {
+      code: "ONBOARDING_INCOMPLETE",
+      currentStep: user.onboardingStep,
+    });
   }
   if (user.credentials.length > 0) throw new AppError(409, "Account already registered — try logging in.");
 
@@ -234,6 +412,12 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
   });
   if (!user) throw new AppError(404, "Start signup first — we need to verify your email.");
   if (!user.emailVerified) throw new AppError(403, "Your email isn't verified yet.", { code: "EMAIL_UNVERIFIED" });
+  if (user.onboardingStep !== "password_set" || req.userId !== user.id) {
+    throw new AppError(409, "Continue registration through the secure onboarding flow.", {
+      code: "ONBOARDING_INCOMPLETE",
+      currentStep: user.onboardingStep,
+    });
+  }
   if (user.credentials.length > 0) throw new AppError(409, "This account already has a passkey — log in instead.");
 
   const { name: verifiedName, credential: cred, deviceType, backedUp } = await verifyRegistrationResponseCredential(
@@ -301,7 +485,8 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
     },
   });
 
-  logger.info(`New account registered: ${normalizedEmail}`);
+  await prisma.user.update({ where: { id: user.id }, data: { onboardingStep: "passkey_set" } });
+  logger.info(`Passkey added during legacy onboarding: ${normalizedEmail}`);
   res.status(201).json({
     user: { id: user.id, email: user.email, name: verifiedName },
     accessToken,
@@ -323,6 +508,12 @@ export const loginOptions: RequestHandler = asyncHandler(async (req, res) => {
   });
   if (!user) throw new AppError(404, "No account found with this email. Sign up first.");
   if (!user.emailVerified) throw new AppError(403, "Verify your email before signing in — we emailed you a link.", { code: "EMAIL_UNVERIFIED" });
+  if (user.onboardingStep !== "complete") {
+    throw new AppError(409, "Finish setting up your account before signing in.", {
+      code: "ONBOARDING_INCOMPLETE",
+      currentStep: user.onboardingStep,
+    });
+  }
 
   const credentials = buildUserCredentialsFromDb(user.credentials);
   if (credentials.length === 0) throw new AppError(403, "No passkeys registered for this account.");
@@ -342,6 +533,12 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email }, include: { credentials: true } });
   if (!user) throw new AppError(401, "Invalid credentials.");
+  if (user.onboardingStep !== "complete") {
+    throw new AppError(409, "Finish setting up your account before signing in.", {
+      code: "ONBOARDING_INCOMPLETE",
+      currentStep: user.onboardingStep,
+    });
+  }
 
   const credentialRecord = user.credentials.find((c) => c.credentialId === body.credential.id);
   if (!credentialRecord) throw new AppError(404, "Passkey not found for this account.");
@@ -433,6 +630,12 @@ export const passwordLogin: RequestHandler = asyncHandler(async (req, res) => {
     // Same generic message for "no account" and "no password set" to avoid
     // account enumeration; the UI surfaces the fallback via /auth/login/options.
     throw new AppError(401, "Invalid credentials.");
+  }
+  if (user.onboardingStep !== "complete") {
+    throw new AppError(409, "Finish setting up your account before signing in.", {
+      code: "ONBOARDING_INCOMPLETE",
+      currentStep: user.onboardingStep,
+    });
   }
 
   const ok = await verifyPassword(user.passwordHash, body.password);

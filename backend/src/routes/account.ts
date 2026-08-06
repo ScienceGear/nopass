@@ -1,11 +1,12 @@
 import { Router } from "express";
 import * as account from "../controllers/accountController.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireCompletedOnboarding } from "../middleware/auth.js";
 import { transferLimiter } from "../middleware/security.js";
 
 const router = Router();
 
 router.use(requireAuth);
+router.use(requireCompletedOnboarding);
 
 router.get("/summary", account.summary);
 router.get("/transactions", account.transactions);

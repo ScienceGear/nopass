@@ -41,6 +41,13 @@ export interface ImageChallengePayload {
   devRegions?: { regionId: string; box: RegionBox }[];
 }
 
+export interface ImageSetupScene {
+  key: string;
+  name: string;
+  svg: string;
+  regions: { id: string; box: RegionBox }[];
+}
+
 interface StoredChallenge {
   userId: string | null;
   sequence: { imageKey: string; regionId: string }[];
@@ -154,13 +161,58 @@ function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
+/** Safe scene data for onboarding. Labels stay server-side so they cannot reveal answers. */
+export function getImageSetupPool(): ImageSetupScene[] {
+  return scenes.map((scene) => ({
+    key: scene.key,
+    name: scene.name,
+    svg: scene.svg,
+    regions: scene.regions.map(({ id, box }) => ({ id, box })),
+  }));
+}
+
+export function isValidImageSetupSequence(sequence: { imageKey: string; regionId: string }[]): boolean {
+  return (
+    sequence.length >= 2 &&
+    sequence.length <= 4 &&
+    new Set(sequence.map((item) => `${item.imageKey}:${item.regionId}`)).size === sequence.length &&
+    sequence.every((item) => regionLookup.has(`${item.imageKey}:${item.regionId}`)) &&
+    new Set(sequence.map((item) => item.imageKey)).size === 1
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Challenge lifecycle
 // ---------------------------------------------------------------------------
 
 export async function createImageChallenge(userId: string | null): Promise<ImageChallengePayload> {
-  const scene = pick(scenes);
-  const targets = shuffle(scene.regions).slice(0, 3);
+  let scene = pick(scenes);
+  let targets = shuffle(scene.regions).slice(0, 3);
+
+  // Once an account owner has chosen an image sequence during onboarding, use
+  // that personal sequence for later image-factor challenges.
+  if (userId) {
+    const setup = await prisma.imageChallengeSetup.findFirst({
+      where: { userId, verified: true, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (setup) {
+      try {
+        const saved = JSON.parse(setup.sequence) as { imageKey: string; regionId: string }[];
+        if (isValidImageSetupSequence(saved)) {
+          const savedScene = sceneByKey.get(saved[0].imageKey);
+          if (savedScene) {
+            scene = savedScene;
+            targets = saved
+              .map((item) => regionLookup.get(`${item.imageKey}:${item.regionId}`))
+              .filter((region): region is ImageRegion => region != null);
+          }
+        }
+      } catch {
+        // A malformed historic audit row must never prevent a user from signing in.
+      }
+    }
+  }
 
   const token = `img_${randomBytes(16).toString("base64url")}`;
   const payload: StoredChallenge = {

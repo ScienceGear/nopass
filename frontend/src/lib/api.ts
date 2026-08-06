@@ -268,11 +268,87 @@ export async function postRegisterInitiate(input: { email: string; name: string 
 }
 
 export async function postVerifyEmail(token: string) {
-  const res = await apiFetch<{ ok: boolean; email: string }>("/auth/register/verify-email", {
+  const res = await apiFetch<{
+    ok: boolean;
+    email: string;
+    user: { id: string; email: string; name: string };
+    accessToken: string;
+    refreshToken: string;
+    onboardingStep: OnboardingStep;
+  }>("/auth/register/verify-email", {
     method: "POST",
     body: JSON.stringify({ token }),
   });
-  return { ok: res.ok, email: res.email };
+  saveSession({
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+  });
+  return res;
+}
+
+export type OnboardingStep = "email_pending" | "password_set" | "passkey_set" | "complete";
+
+export interface OnboardingStatus {
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  onboardingStep: OnboardingStep;
+}
+
+export async function getOnboardingStatus() {
+  return apiFetch<OnboardingStatus>("/auth/onboarding/status");
+}
+
+export async function postOnboardingPassword(input: {
+  password: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}) {
+  return apiFetch<{ ok: boolean; breachWarning: boolean; onboardingStep: OnboardingStep }>(
+    "/auth/onboarding/password",
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export async function postOnboardingPasskeyOptions() {
+  const res = await apiFetch<{ options: PublicKeyCredentialCreationOptionsJSON }>(
+    "/auth/onboarding/passkey/options",
+    { method: "POST" },
+  );
+  return res.options;
+}
+
+export async function postOnboardingPasskeyVerify(input: { credential: RegistrationResponseJSON }) {
+  const [deviceFingerprint, deviceInfo] = await Promise.all([
+    getDeviceFingerprint(),
+    Promise.resolve(getDeviceInfo()),
+  ]);
+  return apiFetch<{ ok: boolean; recoveryCodes: string[]; onboardingStep: OnboardingStep }>(
+    "/auth/onboarding/passkey/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
+    },
+  );
+}
+
+export interface ImageSetupScene {
+  key: string;
+  name: string;
+  svg: string;
+  regions: { id: string; box: [number, number, number, number] }[];
+}
+
+export async function getOnboardingImagePool() {
+  return apiFetch<{ pool: ImageSetupScene[] }>("/auth/onboarding/image-challenge/pool");
+}
+
+export async function postOnboardingImageSetup(sequence: { imageKey: string; regionId: string }[]) {
+  return apiFetch<{ ok: boolean; onboardingStep: OnboardingStep }>(
+    "/auth/onboarding/image-challenge/setup",
+    { method: "POST", body: JSON.stringify({ sequence }) },
+  );
 }
 
 export async function postRegisterStatus(email: string) {

@@ -63,6 +63,14 @@ export const passwordLoginSchema = z.object({
 export const passwordSetSchema = z.object({
   password: passwordSchema,
   currentPassword: z.string().optional(),
+  keystrokes: keystrokeSampleSchema,
+});
+
+export const onboardingImageSequenceSchema = z.object({
+  sequence: z
+    .array(z.object({ imageKey: z.string().min(1), regionId: z.string().min(1) }))
+    .min(2)
+    .max(4),
 });
 
 export const passwordRemoveSchema = z.object({

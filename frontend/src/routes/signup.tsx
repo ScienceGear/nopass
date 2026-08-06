@@ -73,9 +73,10 @@ function Signup() {
       try {
         const status = await postRegisterStatus(email);
         if (!cancelled && status.verified) {
-          setStep(3);
-          setError(null);
-          toast.success("Email verified", { description: "Now let's create your passkey." });
+          toast.success("Email verified", {
+            description: "Continue with your secure account setup.",
+          });
+          void navigate({ to: "/onboarding" });
         }
       } catch {
         /* transient — keep polling */
@@ -87,7 +88,7 @@ function Signup() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [step, email]);
+  }, [step, email, navigate]);
 
   async function startSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -181,7 +182,8 @@ function Signup() {
                     <h1 className="pt-2 text-2xl">Open your account</h1>
                     <p className="text-sm leading-relaxed text-muted-foreground">
                       We only need a name and an email. We&apos;ll email you a link to prove the
-                      address is yours, then your device makes the passkey.
+                      address is yours, then we guide you through backup access, a passkey, and an
+                      account image sequence.
                     </p>
                   </div>
 

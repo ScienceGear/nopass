@@ -111,12 +111,24 @@ Run the narrowest useful validation after a change. For example, run frontend ty
 All routes are mounted below `/api`:
 
 - `/health`: database and Redis health.
-- `/auth`: registration, email verification, WebAuthn registration/login, password fallback, image challenge, QR login, refresh, logout, and current-user endpoints.
+- `/auth`: registration, email verification, WebAuthn registration/login, password fallback, image challenge, QR login, refresh, logout, and current-user endpoints. It also owns the authenticated onboarding endpoints.
 - `/account`: summary, transactions, transfer creation, and transfer confirmation.
 - `/security`: login activity, passkeys, recovery codes, trusted devices, and session revocation.
 - `/user`: profile retrieval and updates.
 
 Refer to `README.md` and the route files for payload contracts before changing an endpoint.
+
+### Required registration state machine
+
+New users must complete these persisted steps in order:
+
+```text
+email_pending → password_set → passkey_set → complete
+```
+
+`/verify-email` exchanges a valid email token for an authenticated onboarding session and sends the browser to `/onboarding`. The onboarding route reads `/api/auth/onboarding/status` and renders the next required action: backup password (with keystroke sample), WebAuthn passkey, then a 2–4 object account image sequence. Do not reintroduce a frontend-only signup progression or mark an account complete before the last step.
+
+Normal passkey/password login, banking endpoints, settings, and profile endpoints must reject an account whose `onboardingStep` is not `complete`. Existing accounts are backfilled by the onboarding migration, based on whether they already have a password or passkey.
 
 ## Change guidelines
 
