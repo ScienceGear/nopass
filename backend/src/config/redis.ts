@@ -1,15 +1,19 @@
 import { Redis } from "ioredis";
+import RedisMock from "ioredis-mock";
 import { env, isProduction } from "./env.js";
 
 let client: Redis | null = null;
 
 export function getRedis(): Redis {
   if (!client) {
-    client = new Redis(env.REDIS_URL, {
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      lazyConnect: false,
-    });
+    client =
+      env.REDIS_URL === "memory://"
+        ? (new RedisMock() as unknown as Redis)
+        : new Redis(env.REDIS_URL, {
+            maxRetriesPerRequest: 1,
+            enableOfflineQueue: false,
+            lazyConnect: false,
+          });
     client.on("error", (err) => {
       if (isProduction) console.error("[redis]", err.message);
     });

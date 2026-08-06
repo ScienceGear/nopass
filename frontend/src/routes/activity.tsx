@@ -136,9 +136,8 @@ function Activity() {
                   <>
                     {/* MAP SLOT — drop a static map render here (720×420) */}
                     <div className="mt-4 grid h-40 place-items-center overflow-hidden rounded-2xl bg-lime-soft">
-                      <img
-                        src=""
-                        alt={`Approximate location: ${active.city}, ${active.country}`}
+                      <div
+                        aria-hidden="true"
                         className="size-full object-cover opacity-0"
                         data-slot="activity-map"
                       />

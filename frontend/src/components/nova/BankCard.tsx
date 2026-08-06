@@ -15,9 +15,7 @@ export function BankCard({ className }: { className?: string }) {
 
       <div className="nova-plate nova-grain relative aspect-[1.62/1] overflow-hidden rounded-[1.75rem] sm:rounded-[2.25rem]">
         {/* IMAGE SLOT — drop your card render here (1600×990, transparent PNG) */}
-        <img
-          src=""
-          alt=""
+        <div
           aria-hidden="true"
           className="absolute inset-0 size-full object-cover opacity-0"
           data-slot="bank-card-render"
