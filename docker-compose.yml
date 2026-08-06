@@ -43,10 +43,12 @@ services:
       # Fill in before `docker compose up` (or copy from backend/.env.example):
       JWT_SECRET: ${JWT_SECRET:-change-me-256-bit-random}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too-256-bit-random}
-      EMAIL_HOST: ${EMAIL_HOST:-smtp.ethereal.email}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.resend.com}
       EMAIL_PORT: ${EMAIL_PORT:-587}
-      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_USER: ${EMAIL_USER:-resend}
       EMAIL_PASS: ${EMAIL_PASS:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-NovaBank Security}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-noreply@updates.sciencegear.tech}
       HIBP_API_KEY: ${HIBP_API_KEY:-}
     ports:
       - "3001:3001"

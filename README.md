@@ -221,7 +221,7 @@ Point the frontend at your API by setting `VITE_API_BASE_URL` if it isn't alread
 | `WEBAUTHN_RP_NAME` | `NovaBank` | Relying party display name |
 | `WEBAUTHN_RP_ID` | `localhost` | Relying party ID — must match the domain passkeys are bound to |
 | `WEBAUTHN_ORIGIN` | `http://localhost:5173` | Must match the origin the frontend is actually served from |
-| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` | `smtp.ethereal.email` / `587` / — | SMTP for OTP + alert emails ([Ethereal](https://ethereal.email/) works well for local dev) |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` | `smtp.resend.com` / `587` / `resend` / — | SMTP for OTP + alert emails. Set `EMAIL_PASS` to a [Resend](https://resend.com) API key; the From address must be on your verified sending domain (`updates.sciencegear.tech`). Leave blank in dev to log codes to the console |
 | `HIBP_API_KEY` | — | Optional; the breach check itself uses the free k-anonymity range API and works without a key |
 | `NODE_ENV` | `development` | In dev, step-up OTP codes are echoed in the API response for convenience |
 
