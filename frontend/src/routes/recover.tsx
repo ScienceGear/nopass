@@ -196,8 +196,8 @@ function Recover() {
         }
         tips={recoverTips}
       >
-        <Reveal className="w-full max-w-[27rem]">
-          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 text-center shadow-card sm:p-8">
+        <Reveal className="w-full max-w-[26rem]">
+          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-5 text-center shadow-card sm:p-6">
             <div className="space-y-2 text-center">
               <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-lime-soft">
                 <KeyRound className="size-6" />

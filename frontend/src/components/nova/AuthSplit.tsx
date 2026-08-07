@@ -37,7 +37,7 @@ export function AuthSplit({
   return (
     <div
       className={cn(
-        "relative grid h-dvh w-full overflow-hidden bg-card lg:grid-cols-[1fr_1.12fr] lg:rounded-[2.25rem] lg:shadow-panel",
+        "relative grid h-full w-full overflow-hidden bg-card lg:grid-cols-[1fr_1.12fr] lg:rounded-[2.25rem] lg:shadow-panel",
         className,
       )}
     >

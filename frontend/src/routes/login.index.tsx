@@ -324,8 +324,8 @@ function LoginPage() {
         }
         tips={loginTips}
       >
-        <Reveal className="w-full max-w-[30rem]">
-          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-6 text-center shadow-card sm:p-8">
+        <Reveal className="w-full max-w-[26rem]">
+          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-5 text-center shadow-card sm:px-6 sm:py-6">
             {stage === "email" ? (
               <form onSubmit={startLogin} className="space-y-6 text-left">
                 <div className="space-y-2 text-center">

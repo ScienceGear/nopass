@@ -50,10 +50,11 @@ export function NovaBackground({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Full-viewport, no-padding background for isolated sign-in / recover screens. */
+/** Full-viewport background for isolated sign-in / recover screens, with a
+ * rounded inner panel so the auth card reads as a framed "page in page". */
 export function AuthBackground({ children }: { children: React.ReactNode }) {
   return (
-    <div className="nova-field nova-grain h-dvh w-full overflow-hidden p-0">{children}</div>
+    <div className="nova-field nova-grain h-dvh w-full overflow-hidden p-3 sm:p-6 lg:p-8">{children}</div>
   );
 }
 

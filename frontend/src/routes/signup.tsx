@@ -281,7 +281,7 @@ function Signup() {
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         className="h-12 rounded-2xl pl-10"
-                        placeholder="Rohan Patil"
+                        placeholder="Your Name"
                       />
                     </div>
                   </div>

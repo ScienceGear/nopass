@@ -77,7 +77,7 @@ function Contact() {
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Rohan Patil"
+                  placeholder="Your Name"
                   className="h-12 rounded-2xl"
                   autoComplete="name"
                 />
