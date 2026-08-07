@@ -18,6 +18,11 @@ function getTransporter(): Transporter {
       port: env.EMAIL_PORT,
       secure: env.EMAIL_PORT === 465,
       auth: { user: env.EMAIL_USER, pass: env.EMAIL_PASS },
+      // Bound the handshake/send so a slow or unreachable SMTP never blocks
+      // the sign-in / signup request for minutes on end.
+      connectionTimeout: 8_000,
+      greetingTimeout: 8_000,
+      socketTimeout: 15_000,
     });
   }
   return transporter;

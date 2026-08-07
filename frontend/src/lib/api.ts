@@ -169,7 +169,21 @@ async function rawFetch(path: string, init: RequestInit = {}) {
     headers.set("Content-Type", "application/json");
   }
   if (session?.accessToken) headers.set("Authorization", `Bearer ${session.accessToken}`);
-  return fetch(`${BASE_URL}${path}`, { ...init, headers });
+
+  // Bounded request so a slow/unreachable API never leaves a button spinning
+  // on "Sending…" / "Checking…" forever.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  try {
+    return await fetch(`${BASE_URL}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new ApiError("The request took too long. Check your connection and try again.", "TIMEOUT");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
