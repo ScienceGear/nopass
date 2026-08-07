@@ -46,6 +46,10 @@ services:
         value: NovaBank Security
       - key: EMAIL_FROM_ADDRESS
         value: noreply@updates.sciencegear.tech
+      # Resend HTTP API key — preferred over SMTP on Render (Render blocks port 587).
+      # Set this in the Render dashboard. When present, EMAIL_PASS is ignored.
+      - key: RESEND_API_KEY
+        sync: false
       - key: TEXTBEE_API_KEY
         sync: false
       - key: TEXTBEE_DEVICE_ID

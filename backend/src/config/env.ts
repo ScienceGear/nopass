@@ -19,6 +19,9 @@ const envSchema = z.object({
   EMAIL_PASS: z.string().default(""),
   EMAIL_FROM_NAME: z.string().default("NovaBank Security"),
   EMAIL_FROM_ADDRESS: z.string().default("security@novabank.local"),
+  // Resend HTTP API key. When set, email is sent via the Resend HTTPS API
+  // instead of SMTP (required on Render, which blocks outbound port 587/465).
+  RESEND_API_KEY: z.string().default(""),
   HIBP_API_KEY: z.string().default(""),
   // TextBee SMS delivery for phone verification. Leave TEXTBEE_API_KEY empty in
   // dev to log OTPs to the console instead of sending real SMS.

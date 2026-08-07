@@ -8,9 +8,6 @@ import { logger } from "../utils/logger.js";
 
 let transporter: Transporter | null = null;
 
-/** Real SMTP is only used when the operator configures credentials in .env. */
-const SMTP_CONFIGURED = Boolean(env.EMAIL_USER && env.EMAIL_PASS);
-
 function getTransporter(): Transporter {
   if (!transporter) {
     transporter = nodemailer.createTransport({
@@ -159,33 +156,70 @@ function renderVerifyEmail(args: { name: string; link: string }): { subject: str
 
 /* ── Delivery ─────────────────────────────────────────────────────────── */
 
+/**
+ * Send via the Resend HTTP API (HTTPS/443).
+ * Required on Render, which blocks outbound SMTP on port 587/465.
+ */
+async function deliverViaResend(
+  email: string,
+  mail: { subject: string; html: string; text: string },
+): Promise<void> {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: FROM,
+      to: [email],
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "(no body)");
+    throw new Error(`Resend API error ${res.status}: ${body}`);
+  }
+}
+
 async function deliver(email: string, mail: { subject: string; html: string; text: string }) {
-  // Missing SMTP credentials is the #1 silent cause of "email never arrives".
-  // Log loudly so operators see it immediately instead of a silent no-op.
-  if (!SMTP_CONFIGURED) {
+  // Missing credentials — the #1 silent cause of "email never arrives".
+  const hasResend = Boolean(env.RESEND_API_KEY);
+  const hasSmtp = Boolean(env.EMAIL_USER && env.EMAIL_PASS);
+
+  if (!hasResend && !hasSmtp) {
     logger.warn(
-      `[email:disabled] EMAIL_USER/EMAIL_PASS not configured  NOT sending "${mail.subject}" to ${email}. ` +
+      `[email:disabled] No email credentials configured — NOT sending "${mail.subject}" to ${email}. ` +
         (isProduction
-          ? "Set EMAIL_USER/EMAIL_PASS in the Render dashboard (render.yaml declares EMAIL_PASS as sync:false)."
+          ? "Set RESEND_API_KEY in the Render dashboard (recommended) or set EMAIL_USER/EMAIL_PASS."
           : "Logging only (dev mode)."),
     );
     if (isProduction) {
-      // Email verification is a required onboarding gate, so a silent no-op
-      // here means "signup looks fine but no email ever arrives". Fail loudly.
       throw new Error(
-        "Email service is not configured. Set EMAIL_USER/EMAIL_PASS in the deployment environment.",
+        "Email service is not configured. Set RESEND_API_KEY (or EMAIL_USER/EMAIL_PASS) in the deployment environment.",
       );
     }
     logger.info(`[email:dev] ${mail.subject} → ${email}\n${mail.text}`);
     return;
   }
+
   try {
-    await getTransporter().sendMail({ from: FROM, to: email, subject: mail.subject, text: mail.text, html: mail.html });
+    if (hasResend) {
+      await deliverViaResend(email, mail);
+    } else {
+      await getTransporter().sendMail({
+        from: FROM,
+        to: email,
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+      });
+    }
     logger.info(`[email] sent "${mail.subject}" → ${email}`);
   } catch (err) {
-    // Fail loudly and rethrow: a quiet catch here hides delivery failures from
-    // the register/verify handshake and makes it look like "no email arrived"
-    // while the request still reports success.
     logger.error(
       "Email send failed",
       err instanceof Error ? (err.stack ?? err.message) : String(err),
