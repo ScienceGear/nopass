@@ -160,20 +160,37 @@ function renderVerifyEmail(args: { name: string; link: string }): { subject: str
 /* ── Delivery ─────────────────────────────────────────────────────────── */
 
 async function deliver(email: string, mail: { subject: string; html: string; text: string }) {
+  // Missing SMTP credentials is the #1 silent cause of "email never arrives".
+  // Log loudly so operators see it immediately instead of a silent no-op.
   if (!SMTP_CONFIGURED) {
-    logger.info(`[email:dev] ${mail.subject} → ${email}\n${mail.text}`);
+    logger.warn(
+      `[email:disabled] EMAIL_USER/EMAIL_PASS not configured  NOT sending "${mail.subject}" to ${email}. ` +
+        (isProduction
+          ? "Set EMAIL_USER/EMAIL_PASS in the Render dashboard (render.yaml declares EMAIL_PASS as sync:false)."
+          : "Logging only (dev mode)."),
+    );
     if (isProduction) {
-      logger.warn(
-        "No SMTP credentials configured in production  emails will NOT be delivered. Set EMAIL_USER/EMAIL_PASS.",
+      // Email verification is a required onboarding gate, so a silent no-op
+      // here means "signup looks fine but no email ever arrives". Fail loudly.
+      throw new Error(
+        "Email service is not configured. Set EMAIL_USER/EMAIL_PASS in the deployment environment.",
       );
     }
+    logger.info(`[email:dev] ${mail.subject} → ${email}\n${mail.text}`);
     return;
   }
   try {
     await getTransporter().sendMail({ from: FROM, to: email, subject: mail.subject, text: mail.text, html: mail.html });
     logger.info(`[email] sent "${mail.subject}" → ${email}`);
   } catch (err) {
-    logger.warn("Email send failed", err instanceof Error ? err.message : String(err));
+    // Fail loudly and rethrow: a quiet catch here hides delivery failures from
+    // the register/verify handshake and makes it look like "no email arrived"
+    // while the request still reports success.
+    logger.error(
+      "Email send failed",
+      err instanceof Error ? (err.stack ?? err.message) : String(err),
+    );
+    throw new Error(`Email delivery failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
