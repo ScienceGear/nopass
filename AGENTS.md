@@ -2,7 +2,7 @@
 
 ## Purpose
 
-NovaBank is a passwordless banking demo. It combines a React/TanStack Start web app with an Express API, PostgreSQL persistence, Redis-backed short-lived state, WebAuthn passkeys, adaptive login risk scoring, email verification, QR cross-device sign-in, and account/security flows. It is a demo—not a production banking system.
+NovaBank is a passwordless banking demo. It combines a React/TanStack Start web app with an Express API, PostgreSQL persistence, Redis-backed short-lived state, WebAuthn passkeys, adaptive login risk scoring, email verification, QR cross-device sign-in, and account/security flows. It is a demonot a production banking system.
 
 ## Repository layout
 

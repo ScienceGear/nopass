@@ -19,7 +19,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/recover")({
   head: () => ({
     meta: [
-      { title: "Recover your account — NovaBank" },
+      { title: "Recover your account  NovaBank" },
       {
         name: "description",
         content: "Get back into your NovaBank account without a password.",
@@ -142,7 +142,7 @@ function Recover() {
       return;
     }
     if (code.trim().length < 4) {
-      setError("Enter a recovery code — format XXXX-XXXX.");
+      setError("Enter a recovery code  format XXXX-XXXX.");
       return;
     }
     setBusy(true);
@@ -182,7 +182,7 @@ function Recover() {
                 <h1 className="pt-2 text-2xl">Recover your account</h1>
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   Lost your devices? Use the email or phone number on file, or a recovery code you
-                  saved. There is no password to reset — that&apos;s by design.
+                  saved. There is no password to reset  that&apos;s by design.
                 </p>
               </div>
 
@@ -230,7 +230,7 @@ function Recover() {
                     </div>
                     {devOtp ? (
                       <p className="text-center text-xs text-muted-foreground">
-                        Dev preview — your code is{" "}
+                        Dev preview  your code is{" "}
                         <span className="font-mono font-semibold text-ink">{devOtp}</span>
                       </p>
                     ) : null}
@@ -294,7 +294,7 @@ function Recover() {
                     </div>
                     {devOtp ? (
                       <p className="text-center text-xs text-muted-foreground">
-                        Dev preview — your code is{" "}
+                        Dev preview  your code is{" "}
                         <span className="font-mono font-semibold text-ink">{devOtp}</span>
                       </p>
                     ) : null}

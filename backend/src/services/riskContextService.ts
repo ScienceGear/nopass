@@ -20,7 +20,7 @@ export interface RiskContext extends RiskInput {
 }
 
 /**
- * Collect the device/IP/behavioural signals shared by every entry point —
+ * Collect the device/IP/behavioural signals shared by every entry point 
  * login and transactions alike. The returned object feeds `evaluateRisk`,
  * the single decision function.
  */
@@ -59,7 +59,7 @@ export async function assessContext(
         const d = h.details ? (JSON.parse(h.details) as { lat?: number; lon?: number }) : null;
         if (d && typeof d.lat === "number" && typeof d.lon === "number") coords = { lat: d.lat, lon: d.lon };
       } catch {
-        /* malformed details — skip */
+        /* malformed details  skip */
       }
       if (!coords) continue;
       const hoursSince = (Date.now() - h.createdAt.getTime()) / 3_600_000;
@@ -71,7 +71,7 @@ export async function assessContext(
     }
   }
 
-  // Keystroke anomaly — suppressed while the profile is still populating.
+  // Keystroke anomaly  suppressed while the profile is still populating.
   const loginCount = await prisma.loginHistory.count({ where: { userId: user.id, eventType: "login" } });
   const keystrokeColdStart = loginCount < COLD_START_LOGINS;
   const profileRow = await prisma.keystrokeProfile.findUnique({ where: { userId: user.id } });

@@ -40,7 +40,7 @@ async function saveChallenge(challenge: string, data: StoredChallenge) {
 /** Pop the stored challenge and validate it matches the client-echoed one. */
 async function takeChallenge(echoedChallenge: string, expectedType: StoredChallenge["type"]): Promise<StoredChallenge> {
   const raw = await getRedis().get(`webauthn:challenge:${echoedChallenge}`);
-  if (!raw) throw new AppError(400, "Challenge expired — please try again.");
+  if (!raw) throw new AppError(400, "Challenge expired  please try again.");
   await getRedis().del(`webauthn:challenge:${echoedChallenge}`);
   const stored = JSON.parse(raw) as StoredChallenge;
   if (stored.type !== expectedType) throw new AppError(400, "Challenge mismatch.");
@@ -64,7 +64,7 @@ export async function buildRegistrationOptions(email: string, name: string): Pro
   });
   // A pending (email-verified but passkey-less) user is fine here; the
   // registerOptions route has already gated on the verification token.
-  if (existing?.credentials.length) throw new AppError(409, "Account already registered — try logging in.");
+  if (existing?.credentials.length) throw new AppError(409, "Account already registered  try logging in.");
 
   const opts = await generateRegistrationOptions({
     rpName: env.WEBAUTHN_RP_NAME,

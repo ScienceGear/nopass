@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="NovaBank banner — placeholder, replace with project banner image" width="100%" />
+  <img src="docs/assets/banner.png" alt="NovaBank banner  placeholder, replace with project banner image" width="100%" />
 </p>
 
 <h1 align="center">NovaBank</h1>
-<p align="center"><strong>Passwordless banking, end to end — no passwords, anywhere, ever.</strong></p>
+<p align="center"><strong>Passwordless banking, end to end  no passwords, anywhere, ever.</strong></p>
 
 <p align="center">
   <a href="#">Live Demo</a> ·
   <a href="#">Video Walkthrough</a> ·
   <a href="#">Presentation Deck</a>
 </p>
-<p align="center"><sub><em>(Links above are placeholders — add before submission/publishing.)</em></sub></p>
+<p align="center"><sub><em>(Links above are placeholders  add before submission/publishing.)</em></sub></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" alt="React 19" />
@@ -26,16 +26,16 @@
   <img src="https://img.shields.io/badge/license-unlicensed-lightgrey" alt="License: Unlicensed" />
 </p>
 
-> **Demo project.** NovaBank showcases passwordless auth patterns end to end. It is not audited or hardened for real financial data — don't use it to hold real money or real user credentials.
+> **Demo project.** NovaBank showcases passwordless auth patterns end to end. It is not audited or hardened for real financial data  don't use it to hold real money or real user credentials.
 
-**nopass** is a full-stack demo of a passwordless digital bank. Sign-up and sign-in run entirely on [WebAuthn](https://webauthn.io/) passkeys (Face ID / Touch ID / security keys) — backed by a real adaptive risk engine, step-up verification, keystroke-dynamics behavioral biometrics, and cross-device QR login.
+**nopass** is a full-stack demo of a passwordless digital bank. Sign-up and sign-in run entirely on [WebAuthn](https://webauthn.io/) passkeys (Face ID / Touch ID / security keys)  backed by a real adaptive risk engine, step-up verification, keystroke-dynamics behavioral biometrics, and cross-device QR login.
 
 It's a monorepo with two apps:
 
 | App | Description |
 |---|---|
-| **`frontend/`** | React 19 + TanStack Start banking UI — marketing pages, signup, dashboard, transfers, security center |
-| **`backend/`** | Express + PostgreSQL + Redis API — WebAuthn, risk scoring, sessions, transactions |
+| **`frontend/`** | React 19 + TanStack Start banking UI  marketing pages, signup, dashboard, transfers, security center |
+| **`backend/`** | Express + PostgreSQL + Redis API  WebAuthn, risk scoring, sessions, transactions |
 
 ---
 
@@ -62,14 +62,14 @@ It's a monorepo with two apps:
 
 ## Why NovaBank?
 
-Passwords are the weakest link in consumer banking — reused across sites, phished, leaked in breaches, and expensive to reset. Passkeys close that gap with public-key cryptography bound to a device and biometric, making the most common attack vectors (phishing, credential stuffing, password reuse) structurally impossible.
+Passwords are the weakest link in consumer banking  reused across sites, phished, leaked in breaches, and expensive to reset. Passkeys close that gap with public-key cryptography bound to a device and biometric, making the most common attack vectors (phishing, credential stuffing, password reuse) structurally impossible.
 
 NovaBank exists to show that a passwordless flow can be *complete*, not just a login screen bolted onto a demo:
 
-- **No fallback password, anywhere** — registration, sign-in, and recovery are all passkey-native.
-- **Risk-aware, not just pass/fail** — every sign-in is scored, and the outcome (allow, step up, block) adapts to context instead of being a single binary check.
-- **Cross-device by design** — QR-based approval mirrors how real passkey ecosystems handle a new device without a shared secret.
-- **A real banking surface** — transfers, transaction history, and a security center sit on top of the auth layer, so the auth story is tested against realistic user flows, not just a login form.
+- **No fallback password, anywhere**  registration, sign-in, and recovery are all passkey-native.
+- **Risk-aware, not just pass/fail**  every sign-in is scored, and the outcome (allow, step up, block) adapts to context instead of being a single binary check.
+- **Cross-device by design**  QR-based approval mirrors how real passkey ecosystems handle a new device without a shared secret.
+- **A real banking surface**  transfers, transaction history, and a security center sit on top of the auth layer, so the auth story is tested against realistic user flows, not just a login form.
 
 ## Features
 
@@ -91,7 +91,7 @@ NovaBank exists to show that a passwordless flow can be *complete*, not just a l
 
 ## Screenshots
 
-> *Placeholders — replace with actual screenshots or GIFs before publishing.*
+> *Placeholders  replace with actual screenshots or GIFs before publishing.*
 
 | Dashboard | Passkey Login |
 |---|---|
@@ -110,7 +110,7 @@ flowchart LR
         WA["Authenticator<br/>Face ID / Touch ID / Security Key"]
     end
 
-    subgraph Server["Backend API — Express + TypeScript"]
+    subgraph Server["Backend API  Express + TypeScript"]
         API["REST API<br/>/api/auth · /api/account · /api/security · /api/user"]
         Risk["Adaptive Risk Engine"]
         WAS["WebAuthn Service<br/>(@simplewebauthn/server)"]
@@ -182,7 +182,7 @@ nopass/
 ### Prerequisites
 
 - Node.js
-- [Bun](https://bun.sh) (frontend package manager — the project ships a `bun.lock`)
+- [Bun](https://bun.sh) (frontend package manager  the project ships a `bun.lock`)
 - PostgreSQL 15+
 - Redis
 
@@ -213,16 +213,16 @@ Point the frontend at your API by setting `VITE_API_BASE_URL` if it isn't alread
 
 | Variable | Default | Notes |
 |---|---|---|
-| `DATABASE_URL` | — | PostgreSQL connection string |
+| `DATABASE_URL` |  | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Used for WebAuthn challenges and login-velocity tracking |
 | `PORT` | `3001` | API port |
-| `JWT_SECRET` | — | ≥16 chars, signs access tokens |
-| `JWT_REFRESH_SECRET` | — | ≥16 chars, signs refresh tokens |
+| `JWT_SECRET` |  | ≥16 chars, signs access tokens |
+| `JWT_REFRESH_SECRET` |  | ≥16 chars, signs refresh tokens |
 | `WEBAUTHN_RP_NAME` | `NovaBank` | Relying party display name |
-| `WEBAUTHN_RP_ID` | `localhost` | Relying party ID — must match the domain passkeys are bound to |
+| `WEBAUTHN_RP_ID` | `localhost` | Relying party ID  must match the domain passkeys are bound to |
 | `WEBAUTHN_ORIGIN` | `http://localhost:5173` | Must match the origin the frontend is actually served from |
-| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` | `smtp.resend.com` / `587` / `resend` / — | SMTP for OTP + alert emails. Set `EMAIL_PASS` to a [Resend](https://resend.com) API key; the From address must be on your verified sending domain (`updates.sciencegear.tech`). Leave blank in dev to log codes to the console |
-| `HIBP_API_KEY` | — | Optional; the breach check itself uses the free k-anonymity range API and works without a key |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` | `smtp.resend.com` / `587` / `resend` /  | SMTP for OTP + alert emails. Set `EMAIL_PASS` to a [Resend](https://resend.com) API key; the From address must be on your verified sending domain (`updates.sciencegear.tech`). Leave blank in dev to log codes to the console |
+| `HIBP_API_KEY` |  | Optional; the breach check itself uses the free k-anonymity range API and works without a key |
 | `NODE_ENV` | `development` | In dev, step-up OTP codes are echoed in the API response for convenience |
 
 ## API Reference
@@ -332,7 +332,7 @@ Set these as **secret** env vars in the Render dashboard (the blueprint marks th
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | your PostgreSQL URL (Aiven, Render Postgres, etc.) |
-| `REDIS_URL` | a real Redis URL (e.g. [Upstash](https://upstash.com) free tier, `rediss://...`) — `memory://` is dev-only |
+| `REDIS_URL` | a real Redis URL (e.g. [Upstash](https://upstash.com) free tier, `rediss://...`)  `memory://` is dev-only |
 | `JWT_SECRET` / `JWT_REFRESH_SECRET` | long, unique, random strings |
 | `EMAIL_PASS` | your Resend API key |
 | `TEXTBEE_API_KEY` | your TextBee API key |
@@ -352,7 +352,7 @@ The frontend builds with the Nitro **vercel** preset (`nitro: { preset: "vercel"
 ### 3. Post-deploy checks
 
 - `GET https://<render>.onrender.com/api/health` → `{"status":"ok","database":"ok","redis":"ok"}`.
-- Sign in with a passkey at `https://novabank.sciencegear.tech` — the WebAuthn ceremony only succeeds if the RP origin matches the exact domain you registered it on.
+- Sign in with a passkey at `https://novabank.sciencegear.tech`  the WebAuthn ceremony only succeeds if the RP origin matches the exact domain you registered it on.
 - Phone OTP (TextBee) and email (Resend) must be configured before they can be exercised from production.
 
 ## Roadmap
@@ -371,7 +371,7 @@ Realistic next steps beyond the hackathon scope:
 
 ## Team
 
-> *Placeholders — replace with actual team member details.*
+> *Placeholders  replace with actual team member details.*
 
 | Name | Role | Links |
 |---|---|---|
@@ -386,8 +386,8 @@ Realistic next steps beyond the hackathon scope:
 - [Have I Been Pwned](https://haveibeenpwned.com/) for the k-anonymity breach-check API
 - [shadcn/ui](https://ui.shadcn.com/) and [Radix UI](https://www.radix-ui.com/) for accessible component primitives
 - [TanStack](https://tanstack.com/) (Start, Router, Query) for the frontend framework
-- *(Hackathon name / organizers — placeholder)*
+- *(Hackathon name / organizers  placeholder)*
 
 ## License
 
-No license file is currently included in this repository — all rights reserved by default unless the maintainer adds one.
+No license file is currently included in this repository  all rights reserved by default unless the maintainer adds one.

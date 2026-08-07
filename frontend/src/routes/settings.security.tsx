@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { Check, KeyRound, Loader2, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, Download, KeyRound, Loader2, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { Button, EmptyState, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
 import { PhoneInput } from "@/components/nova/PhoneInput";
 import { ListSkeleton } from "@/components/nova/skeletons";
 import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { RequireAuth } from "@/components/nova/RequireAuth";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +21,7 @@ import {
   postPasskey,
   postPhoneOtpRequest,
   postRegenerateRecoveryCodes,
+  putNotificationPrefs,
   patchProfile,
   revokeDevice,
 } from "@/lib/api";
@@ -30,7 +31,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/settings/security")({
   head: () => ({
     meta: [
-      { title: "Security settings — NovaBank" },
+      { title: "Security settings  NovaBank" },
       {
         name: "description",
         content: "Manage your passkeys, recovery codes, trusted devices and security alerts.",
@@ -43,6 +44,7 @@ export const Route = createFileRoute("/settings/security")({
 });
 
 function SecuritySettings() {
+  const qc = useQueryClient();
   const passkeys = useQuery({ queryKey: ["passkeys"], queryFn: getPasskeys });
   const codes = useQuery({ queryKey: ["recovery"], queryFn: getRecoveryCodes });
   const prefs = useQuery({ queryKey: ["prefs"], queryFn: getNotificationPrefs });
@@ -59,6 +61,7 @@ function SecuritySettings() {
   const [phoneOtp, setPhoneOtp] = React.useState("");
   const [phoneBusy, setPhoneBusy] = React.useState(false);
   const [phoneMsg, setPhoneMsg] = React.useState<string | null>(null);
+  const [savingPrefs, setSavingPrefs] = React.useState(false);
 
   const phoneChanged = Boolean(phone && profile.data && phone !== profile.data.phone);
 
@@ -74,6 +77,27 @@ function SecuritySettings() {
       setPhone(profile.data.phone ?? "");
     }
   }, [profile.data]);
+
+  async function togglePref(id: string, enabled: boolean) {
+    const key =
+      id === "new_device"
+        ? "alertNewDevice"
+        : id === "large_transfer"
+          ? "alertLargeTransfer"
+          : id === "blocked"
+            ? "alertBlockedSignIn"
+            : "alertProductUpdates";
+    setSavingPrefs(true);
+    try {
+      await putNotificationPrefs({ [key]: enabled });
+      await qc.invalidateQueries({ queryKey: ["prefs"] });
+    } catch {
+      toast.error("Could not save that alert preference.");
+      await qc.invalidateQueries({ queryKey: ["prefs"] });
+    } finally {
+      setSavingPrefs(false);
+    }
+  }
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -298,10 +322,10 @@ function SecuritySettings() {
                   One-time codes for the day you lose every device. Store them offline.
                 </p>
                 <div className="mt-4 hairline-y">
-                  <MetaLine label="Remaining" value={`${codes.data?.remaining ?? "—"} of 10`} />
+                  <MetaLine label="Remaining" value={`${codes.data?.remaining ?? ""} of 10`} />
                   <MetaLine
                     label="Generated"
-                    value={codes.data ? fmt(codes.data.lastGeneratedAt) : "—"}
+                    value={codes.data ? fmt(codes.data.lastGeneratedAt) : ""}
                   />
                 </div>
                 <Button
@@ -328,10 +352,13 @@ function SecuritySettings() {
                           <Smartphone className="size-[1.05rem]" />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{device.deviceInfo}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold">{device.deviceName}</p>
+                            {device.isCurrent ? <PillBadge tone="soft">This device</PillBadge> : null}
+                          </div>
                           <p className="text-xs text-muted-foreground">
-                            {device.location || "Location unavailable"} · last used{" "}
-                            {fmt(device.lastSeen)}
+                            {device.location || "Location unavailable"} · IP {device.ipMasked} · last
+                            used {fmt(device.lastSeen)}
                           </p>
                         </div>
                         <button
@@ -369,7 +396,12 @@ function SecuritySettings() {
                         <p className="text-sm font-semibold">{p.label}</p>
                         <p className="text-[0.8125rem] text-muted-foreground">{p.hint}</p>
                       </div>
-                      <Switch defaultChecked={p.enabled} className="mt-1 shrink-0" />
+                      <Switch
+                        checked={p.enabled}
+                        disabled={savingPrefs}
+                        onCheckedChange={(checked) => togglePref(p.id, checked)}
+                        className="mt-1 shrink-0"
+                      />
                     </div>
                   ))}
                   {prefs.isPending ? <ListSkeleton rows={3} /> : null}
@@ -384,12 +416,28 @@ function SecuritySettings() {
                 <DialogTitle className="flex items-center gap-2">
                   <ShieldCheck className="size-5" /> Your recovery codes
                 </DialogTitle>
+                <DialogDescription>
+                  {codeList.length > 0
+                    ? "Store these offline — each code works exactly once."
+                    : "For security, existing codes can't be shown again. Regenerate a fresh set, then store them offline."}
+                </DialogDescription>
               </DialogHeader>
-              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 font-mono text-sm tracking-[0.08em]">
-                {codeList.map((c) => (
-                  <span key={c}>{c}</span>
-                ))}
-              </div>
+              {codeList.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 font-mono text-sm tracking-[0.08em]">
+                  {codeList.map((c) => (
+                    <span key={c}>{c}</span>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <p className="font-medium text-ink">Old codes stay hidden</p>
+                  <p className="mt-1 leading-relaxed">
+                    Codes are only revealed the moment they&apos;re generated, then hashed and stored
+                    so even we can&apos;t read them back. If you need a printable copy, regenerate a
+                    fresh set below — your old codes are immediately invalidated.
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   variant="outline"
@@ -399,14 +447,15 @@ function SecuritySettings() {
                     downloadRecoveryCodesPdf(codeList, profile.data?.email ?? "NovaBank user")
                   }
                 >
-                  Download as PDF
+                  <Download className="size-4" /> Download as PDF
                 </Button>
                 <Button
                   className="flex-1"
                   onClick={async () => {
                     const res = await postRegenerateRecoveryCodes();
                     setCodeList(res.codes);
-                    toast.success("New codes generated");
+                    await codes.refetch();
+                    toast.success("New codes generated — old ones are now invalid");
                   }}
                 >
                   Regenerate

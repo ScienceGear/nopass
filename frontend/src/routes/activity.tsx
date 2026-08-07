@@ -24,7 +24,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/activity")({
   head: () => ({
     meta: [
-      { title: "Login & security history — NovaBank" },
+      { title: "Login & security history  NovaBank" },
       {
         name: "description",
         content:
@@ -122,7 +122,7 @@ function Activity() {
                     <EmptyState
                       icon={<ShieldAlert />}
                       title="Nothing in this filter"
-                      description="Try another filter — your account history is otherwise complete."
+                      description="Try another filter  your account history is otherwise complete."
                     />
                   )}
                 </div>
@@ -134,7 +134,7 @@ function Activity() {
                 <p className="eyebrow">Selected event</p>
                 {active ? (
                   <>
-                    {/* MAP SLOT — drop a static map render here (720×420) */}
+                    {/* MAP SLOT  drop a static map render here (720×420) */}
                     <div className="mt-4 grid h-40 place-items-center overflow-hidden rounded-2xl bg-lime-soft">
                       <div
                         aria-hidden="true"
@@ -152,7 +152,10 @@ function Activity() {
                         value={<span className="font-mono text-xs">{active.ipMasked}</span>}
                       />
                       <MetaLine label="Risk" value={<RiskBadge level={active.risk} />} />
-                      <MetaLine label="Session" value={active.sessionActive ? "Active" : "Ended"} />
+                      <MetaLine
+                        label="Session"
+                        value={active.isCurrent ? "This session · Active" : active.sessionActive ? "Active" : "Ended"}
+                      />
                     </div>
                     <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                       {active.signal}

@@ -1,5 +1,5 @@
 /**
- * Keystroke dynamics — per-key-transition dwell-times.
+ * Keystroke dynamics  per-key-transition dwell-times.
  *
  * Profile format: { "a-b": { mean, std, count } } where the key is the pair of
  * keys with their charCodes joined by "-" (e.g. "97-98" for "ab"). We compare
@@ -61,7 +61,7 @@ export function mergeSample(profile: KeystrokeProfile, sample: KeystrokeSample):
 /** Anomaly score 0..1. 0 = perfectly typical, 1 = wildly atypical. */
 export function anomalyScore(profile: KeystrokeProfile, sample: KeystrokeSample): number {
   if (sample.transitions.length === 0 || sample.transitions.length !== sample.timings.length) return 0;
-  if (!profileHasData(profile)) return 0; // not enough baseline — don't punish
+  if (!profileHasData(profile)) return 0; // not enough baseline  don't punish
 
   let anomalous = 0;
   let scored = 0;

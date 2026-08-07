@@ -53,7 +53,7 @@ export function getStoredSession(): StoredSession | null {
   return read();
 }
 
-/** Client-only session read — never touched during SSR to avoid hydration drift. */
+/** Client-only session read  never touched during SSR to avoid hydration drift. */
 export function useSession() {
   const [session, setSession] = useState<StoredSession | null>(null);
   const [ready, setReady] = useState(false);

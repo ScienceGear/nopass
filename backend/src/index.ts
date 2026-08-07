@@ -92,7 +92,7 @@ app.use(errorHandler);
 async function main() {
   const redisOk = await pingRedis();
   if (!redisOk) {
-    logger.warn("Redis unreachable — WebAuthn challenges and step-up will fail. Start redis-server on 6379.");
+    logger.warn("Redis unreachable  WebAuthn challenges and step-up will fail. Start redis-server on 6379.");
   } else {
     logger.info("Redis connected");
   }
@@ -104,7 +104,7 @@ async function main() {
     dbOk = false;
   }
   if (!dbOk) {
-    logger.error("PostgreSQL unreachable — check DATABASE_URL and that postgres is running.");
+    logger.error("PostgreSQL unreachable  check DATABASE_URL and that postgres is running.");
     process.exit(1);
   }
 

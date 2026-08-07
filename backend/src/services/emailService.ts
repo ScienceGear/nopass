@@ -113,10 +113,10 @@ function renderOtpEmail(args: { code: string; purpose: "login_step_up" | "recove
     <h1 style="margin:10px 0 0;color:${BRAND.ink};font-family:Inter,Arial,sans-serif;font-size:22px;font-weight:700;line-height:1.35;">${label}</h1>
     <p style="margin:14px 0 0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:14px;line-height:1.7;">Use the code below ${hint}</p>
     ${codeBlock(args.code)}
-    <p style="margin:0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.7;">This code expires in <strong style="color:${BRAND.ink};">${args.expiresMinutes} minutes</strong>. Never share it with anyone — NovaBank will never ask for it.</p>`;
+    <p style="margin:0;color:${BRAND.muted};font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.7;">This code expires in <strong style="color:${BRAND.ink};">${args.expiresMinutes} minutes</strong>. Never share it with anyone  NovaBank will never ask for it.</p>`;
   return {
     subject: label,
-    html: layout(`${label} — ${args.code}`, content),
+    html: layout(`${label}  ${args.code}`, content),
     text: `${label}\n\nUse code ${args.code} ${hint.replace(/\.$/, ".")}\nIt expires in ${args.expiresMinutes} minutes. Never share it.`,
   };
 }
@@ -159,7 +159,7 @@ async function deliver(email: string, mail: { subject: string; html: string; tex
     logger.info(`[email:dev] ${mail.subject} → ${email}\n${mail.text}`);
     if (isProduction) {
       logger.warn(
-        "No SMTP credentials configured in production — emails will NOT be delivered. Set EMAIL_USER/EMAIL_PASS.",
+        "No SMTP credentials configured in production  emails will NOT be delivered. Set EMAIL_USER/EMAIL_PASS.",
       );
     }
     return;

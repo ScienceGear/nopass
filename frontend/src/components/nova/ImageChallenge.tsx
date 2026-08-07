@@ -42,7 +42,7 @@ export function ImageChallenge({
       try {
         await onSolve(challenge.challengeToken, clicks);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "That didn't work — try again.");
+        setError(err instanceof Error ? err.message : "That didn't work  try again.");
         setClicks([]);
       } finally {
         solving.current = false;

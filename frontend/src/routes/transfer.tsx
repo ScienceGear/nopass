@@ -21,7 +21,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/transfer")({
   head: () => ({
     meta: [
-      { title: "Send money — NovaBank" },
+      { title: "Send money  NovaBank" },
       {
         name: "description",
         content: "Send money in seconds. Transfers above ₹50,000 ask for one extra check.",
@@ -115,7 +115,7 @@ function Transfer() {
       setStepUp(null);
       toast.success("Transfer verified and sent");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "That didn't match — try again.");
+      toast.error(err instanceof Error ? err.message : "That didn't match  try again.");
       throw err;
     } finally {
       setConfirming(false);
@@ -169,7 +169,7 @@ function Transfer() {
                       label="Reference"
                       value={<span className="font-mono text-xs">{receipt.reference}</span>}
                     />
-                    <MetaLine label="Note" value={note || "—"} />
+                    <MetaLine label="Note" value={note || ""} />
                     <MetaLine label="Approved by" value="Passkey · this device" />
                   </div>
                   <Button

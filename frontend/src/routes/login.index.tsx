@@ -42,7 +42,7 @@ export const Route = createFileRoute("/login/")({
       {
         name: "description",
         content:
-          "One tap with Face ID or Touch ID. No password, no OTP by default — just your device.",
+          "One tap with Face ID or Touch ID. No password, no OTP by default  just your device.",
       },
       { property: "og:title", content: "Sign in to NovaBank" },
       { property: "og:description", content: "Passkey sign-in, risk-scored in real time." },
@@ -66,7 +66,7 @@ const loginTips: AuthTip[] = [
   {
     icon: <ShieldCheck className="size-4" />,
     title: "Risk-scored in real time",
-    body: "Unusual sign-ins get an extra check — or a friendly block.",
+    body: "Unusual sign-ins get an extra check  or a friendly block.",
   },
 ];
 
@@ -173,7 +173,7 @@ function LoginPage() {
       deviceInfo,
     });
     setPhase("success");
-    toast.success("It's you — welcome back", { description: "Extra check passed." });
+    toast.success("It's you  welcome back", { description: "Extra check passed." });
     goAfterLogin();
   }
 
@@ -258,7 +258,7 @@ function LoginPage() {
         deviceInfo,
       });
       setPhase("success");
-      toast.success("It's you — welcome back");
+      toast.success("It's you  welcome back");
       if (stepUp.onboardingIncomplete) {
         void navigate({ to: "/onboarding" });
       } else {
@@ -374,7 +374,7 @@ function LoginPage() {
                   <div className="space-y-2">
                     <OtherMethod
                       label="Email me a code"
-                      hint="No passkey needed — we email a one-time sign-in link."
+                      hint="No passkey needed  we email a one-time sign-in link."
                       onClick={() => navigate({ to: "/recover" })}
                     />
                     <OtherMethod

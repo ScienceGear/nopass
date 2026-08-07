@@ -66,7 +66,7 @@ export const recoveryLoginSchema = z.object({
   keystrokes: keystrokeSampleSchema,
 });
 
-/** Password fallback policy — minimum 10 chars, with letters + digits. */
+/** Password fallback policy  minimum 10 chars, with letters + digits. */
 export const onboardingImageSequenceSchema = z.object({
   sequence: z
     .array(z.object({ imageKey: z.string().min(1), regionId: z.string().min(1) }))
@@ -166,4 +166,11 @@ export const refreshSchema = z.object({
 export const activityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const notificationPrefsSchema = z.object({
+  alertNewDevice: z.boolean().optional(),
+  alertLargeTransfer: z.boolean().optional(),
+  alertBlockedSignIn: z.boolean().optional(),
+  alertProductUpdates: z.boolean().optional(),
 });

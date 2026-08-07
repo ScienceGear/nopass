@@ -5,12 +5,12 @@ Express + TypeScript API for the passwordless banking demo. Talks to PostgreSQL 
 ## Stack
 
 - **Express 4** + TypeScript (strict), zod validation, helmet, hpp, express-rate-limit
-- **Prisma 6** + PostgreSQL — schema in `prisma/schema.prisma`
-- **Redis** — WebAuthn challenges, QR grants, transfer tokens, login-velocity counters
-- **WebAuthn** — `@simplewebauthn/server` 11 (attestation `none`, platform authenticators)
-- **argon2** — recovery-code hashes, OTP hashes
-- **nodemailer** — Ethereal (dev) mailer for OTPs and security alerts
-- **ipapi.co** — IP → city/country geolocation (best-effort; failures are non-fatal)
+- **Prisma 6** + PostgreSQL  schema in `prisma/schema.prisma`
+- **Redis**  WebAuthn challenges, QR grants, transfer tokens, login-velocity counters
+- **WebAuthn**  `@simplewebauthn/server` 11 (attestation `none`, platform authenticators)
+- **argon2**  recovery-code hashes, OTP hashes
+- **nodemailer**  Ethereal (dev) mailer for OTPs and security alerts
+- **ipapi.co**  IP → city/country geolocation (best-effort; failures are non-fatal)
 
 ## Getting started
 
@@ -34,7 +34,7 @@ npm run db:seed        # after registering a passkey in the UI
 ```
 src/
   config/        env.ts (zod-validated), db.ts (Prisma client), redis.ts (ioredis)
-  controllers/   auth, account, security, user — request/response shaping
+  controllers/   auth, account, security, user  request/response shaping
   middleware/    errorHandler, auth (requireAuth/optionalAuth), security (rate limits)
   services/      webauthn, riskEngine, keystroke, email, hibp, qr, device
   utils/         crypto (argon2 + JWT), geo, logger, validators (zod)
@@ -44,7 +44,7 @@ src/
 
 ## Endpoints
 
-### Auth — `/api/auth`
+### Auth  `/api/auth`
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/register/options` | `{ name, email }` → WebAuthn creation options (challenge in Redis, TTL 300s) |
@@ -60,7 +60,7 @@ src/
 | POST | `/logout` | revokes the refresh token (stored as SHA-256) |
 | GET  | `/me` | current user |
 
-### Account — `/api/account`
+### Account  `/api/account`
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/summary` | balance, recent transactions, stats |
@@ -68,7 +68,7 @@ src/
 | POST | `/transfer` | `{ recipient, amount (₹), note }`; amount ≥ ₹50,000 → OTP step-up (transfer token in Redis, TTL 15min) |
 | POST | `/transfer/confirm` | `{ transferToken, otp }` → executes inside a `$transaction` |
 
-### Security — `/api/security`
+### Security  `/api/security`
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/activity` | merged login + transfer events, newest first |
@@ -81,7 +81,7 @@ src/
 | POST | `/devices` / DELETE `/devices/:id` | trusted devices |
 | POST | `/sessions/:id/revoke` / `/sessions/revoke-all` | revoke sessions |
 
-### User — `/api/user`
+### User  `/api/user`
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/profile` / PATCH `/profile` | read / update profile |
@@ -99,4 +99,4 @@ Keystroke profiles (`keystrokeService.ts`) are per-transition dwell-time distrib
 ## Notes
 
 - `.env.example` documents every variable; `WEBAUTHN_ORIGIN` must exactly match the frontend origin (dev: `http://localhost:5173`).
-- `npm audit` reports high-severity advisories in transitive deps of this demo scaffold — acceptable for a non-production demo.
+- `npm audit` reports high-severity advisories in transitive deps of this demo scaffold  acceptable for a non-production demo.

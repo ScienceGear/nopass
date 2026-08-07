@@ -12,7 +12,7 @@ export interface AuthTip {
 
 /**
  * Split-sign-in shell: a branded navy panel on the left (headline + tips) and
- * the form on the right. Uses a single document scroll — no inner scrollbars.
+ * the form on the right. Uses a single document scroll  no inner scrollbars.
  * The left panel is a normal grid cell that stretches to match the row, so both
  * halves scroll together on every screen. On small screens it becomes a top
  * strip and the whole page scrolls as one.

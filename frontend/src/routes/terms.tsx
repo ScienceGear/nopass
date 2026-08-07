@@ -6,7 +6,7 @@ import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/
 export const Route = createFileRoute("/terms")({
   head: () => ({
     meta: [
-      { title: "Terms of service — NovaBank" },
+      { title: "Terms of service  NovaBank" },
       {
         name: "description",
         content: "The terms that apply when you use the NovaBank demo.",
@@ -32,7 +32,7 @@ const sections = [
   },
   {
     title: "Recovery codes",
-    body: "Recovery codes are shown exactly once at sign-up and stored only as irreversible hashes. If you lose them and every device, you lose access — we cannot recover them for you.",
+    body: "Recovery codes are shown exactly once at sign-up and stored only as irreversible hashes. If you lose them and every device, you lose access  we cannot recover them for you.",
   },
   {
     title: "Availability",
@@ -61,7 +61,7 @@ function Terms() {
           </Reveal>
           <Reveal delay={140}>
             <p className="mx-auto mt-5 max-w-[32rem] text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Last updated August 2026. This page is short on purpose — no dark patterns, no
+              Last updated August 2026. This page is short on purpose  no dark patterns, no
               legalese hiding in a wall of text.
             </p>
           </Reveal>

@@ -30,7 +30,7 @@ export const getProfile: RequestHandler = asyncHandler(async (req, res) => {
 const updateProfileSchema = z.object({
   name: z.string().min(2).max(80).optional(),
   phone: z.string().regex(/^\+[1-9]\d{7,14}$/).optional(),
-  /** Required when the phone number is changing — proves ownership of the new number. */
+  /** Required when the phone number is changing  proves ownership of the new number. */
   phoneOtp: z.string().length(6).optional(),
 });
 

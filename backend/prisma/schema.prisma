@@ -1,4 +1,4 @@
-// NovaBank — Prisma schema (single source of truth)
+// NovaBank  Prisma schema (single source of truth)
 // PostgreSQL 15+ required.
 
 generator client {
@@ -32,6 +32,7 @@ name          String
   recoveryCodes          RecoveryCode[]
   emailVerificationToken EmailVerificationToken?
   imageChallengeSetups   ImageChallengeSetup[]
+  securitySettings       UserSecuritySettings?
 }
 
 model Credential {
@@ -144,7 +145,7 @@ model QrSession {
   createdAt  DateTime @default(now())
 }
 
-/** Email verification tokens — one per user, single-use, hashed, 15-min TTL. */
+/** Email verification tokens  one per user, single-use, hashed, 15-min TTL. */
 model EmailVerificationToken {
   id        String   @id @default(uuid())
   userId    String   @unique
@@ -166,7 +167,7 @@ model ImageChallengeSetup {
   user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-/** Phone (SMS) OTP codes — hashed, one-per-purpose, 10-min TTL. */
+/** Phone (SMS) OTP codes  hashed, one-per-purpose, 10-min TTL. */
 model PhoneOtp {
   id        String   @id @default(uuid())
   phone     String
@@ -177,4 +178,17 @@ model PhoneOtp {
   createdAt DateTime @default(now())
 
   @@index([phone, purpose])
+}
+
+/** Email alert preferences for the security settings page. */
+model UserSecuritySettings {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  alertNewDevice       Boolean  @default(true)
+  alertLargeTransfer   Boolean  @default(true)
+  alertBlockedSignIn   Boolean  @default(true)
+  alertProductUpdates  Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -1,4 +1,4 @@
-# NovaBank — Frontend
+# NovaBank  Frontend
 
 The passwordless banking UI. Built with TanStack Start, React 19, Tailwind CSS 4, shadcn/ui-style components, lucide-react and `@simplewebauthn/browser` for real WebAuthn passkeys.
 
@@ -52,15 +52,15 @@ src/
 
 ## Routes
 
-- `/` — marketing home
-- `/signup` — passkey registration flow (creates 10 one-time recovery codes)
-- `/login` — passkey sign-in with adaptive step-up (OTP / re-confirm / block)
-- `/login/approve` — cross-device QR approval
-- `/dashboard` — account summary, transactions, security snapshot
-- `/transfer` — send money; amounts ≥ ₹50,000 require an emailed OTP step-up
-- `/activity` — login & transfer history with one-tap session revoke
-- `/settings/security` — passkeys, recovery codes, devices, alerts
-- `/accounts`, `/security`, `/about`, `/pricing` — supporting pages
+- `/`  marketing home
+- `/signup`  passkey registration flow (creates 10 one-time recovery codes)
+- `/login`  passkey sign-in with adaptive step-up (OTP / re-confirm / block)
+- `/login/approve`  cross-device QR approval
+- `/dashboard`  account summary, transactions, security snapshot
+- `/transfer`  send money; amounts ≥ ₹50,000 require an emailed OTP step-up
+- `/activity`  login & transfer history with one-tap session revoke
+- `/settings/security`  passkeys, recovery codes, devices, alerts
+- `/accounts`, `/security`, `/about`, `/pricing`  supporting pages
 
 ## API layer
 

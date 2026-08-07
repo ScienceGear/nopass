@@ -1,5 +1,5 @@
 /**
- * NovaBank API layer — the ONLY place network access lives.
+ * NovaBank API layer  the ONLY place network access lives.
  * Talks to the Express backend on VITE_API_BASE_URL (default "/api"),
  * attaches the access token, auto-refreshes once on 401, and maps backend
  * responses into the UI's domain shapes.
@@ -99,6 +99,8 @@ export interface ActivityEvent {
   risk: RiskLevel;
   signal: string;
   sessionActive: boolean;
+  /** True when this event belongs to the current session/device. */
+  isCurrent?: boolean;
   /** Present on login events whose session can still be revoked. */
   sessionId?: string;
 }
@@ -158,33 +160,6 @@ export function formatINR(minor: number, opts?: { signed?: boolean }) {
   return `${minor < 0 ? "−" : "+"}${formatted}`;
 }
 
-const notificationPrefs = [
-  {
-    id: "new_device",
-    label: "Email me when a new device signs in",
-    hint: "Sent within seconds of the session starting",
-    enabled: true,
-  },
-  {
-    id: "large_transfer",
-    label: "Email me for transfers above ₹50,000",
-    hint: "Receipt plus the device that approved it",
-    enabled: true,
-  },
-  {
-    id: "blocked",
-    label: "Email me when we block a sign-in",
-    hint: "Includes the signal that triggered the block",
-    enabled: true,
-  },
-  {
-    id: "product",
-    label: "Product updates from NovaBank",
-    hint: "Roughly once a month. No marketing blasts.",
-    enabled: false,
-  },
-];
-
 /* ── Request plumbing with token refresh ───────────────────────────────── */
 
 async function rawFetch(path: string, init: RequestInit = {}) {
@@ -218,7 +193,7 @@ async function apiFetch<T>(path: string, init: RequestInit = {}, retry = true): 
           res = await rawFetch(path, init);
         }
       } catch {
-        /* refresh failed — fall through to the 401 handling below */
+        /* refresh failed  fall through to the 401 handling below */
       }
       if (res.status === 401) clearSession();
     } else {
@@ -962,28 +937,22 @@ export async function getActivity(): Promise<ActivityEvent[]> {
       type: string;
       title: string;
       detail: string;
+      signal: string | null;
       device: string;
+      ipAddress: string | null;
+      ipMasked: string;
       location: string | null;
       riskScore: number;
       riskAction: string;
       timestamp: string;
+      sessionId: string | null;
+      sessionActive: boolean;
+      isCurrent: boolean;
     }[];
     total: number;
   }>("/security/activity", { headers: authHeaders() });
 
   return res.events.map((e) => {
-    let detail = e.detail;
-    let sessionId: string | undefined;
-    try {
-      const parsed = JSON.parse(e.detail);
-      if (parsed && typeof parsed === "object") {
-        detail = parsed.signal ?? parsed.sessionId ?? "";
-        sessionId = parsed.sessionId ?? undefined;
-      }
-    } catch {
-      /* detail is a plain string */
-    }
-
     const [city = "Unknown", country = "Unknown"] = (e.location ?? "Unknown, Unknown").split(", ");
     const isLogin = e.type === "login";
     return {
@@ -993,11 +962,12 @@ export async function getActivity(): Promise<ActivityEvent[]> {
       device: e.device,
       city,
       country,
-      ipMasked: maskIp(),
+      ipMasked: e.ipMasked,
       risk: e.riskScore > 60 ? "high" : e.riskScore > 30 ? "medium" : "low",
-      signal: detail || e.title,
-      sessionActive: isLogin && e.riskAction === "allow",
-      ...(sessionId ? { sessionId } : {}),
+      signal: e.signal || e.detail || e.title,
+      sessionActive: e.sessionActive,
+      isCurrent: e.isCurrent,
+      ...(e.sessionId ? { sessionId: e.sessionId } : {}),
     };
   });
 }
@@ -1016,10 +986,6 @@ export async function getSecuritySnapshot() {
     passkeys: number;
     blockedThisMonth: number;
   }>("/security/snapshot", { headers: authHeaders() });
-}
-
-function maskIp(): string {
-  return "•".repeat(8);
 }
 
 export async function postRevokeSession(sessionId: string) {
@@ -1112,19 +1078,91 @@ export async function postRegenerateRecoveryCodes() {
   };
 }
 
-export async function getNotificationPrefs() {
-  return notificationPrefs;
+export interface NotificationPref {
+  id: string;
+  label: string;
+  hint: string;
+  enabled: boolean;
 }
 
-export async function getDevices() {
+interface PrefBackend {
+  alertNewDevice: boolean;
+  alertLargeTransfer: boolean;
+  alertBlockedSignIn: boolean;
+  alertProductUpdates: boolean;
+}
+
+export async function getNotificationPrefs(): Promise<NotificationPref[]> {
+  const p = await apiFetch<PrefBackend>("/security/notification-prefs", {
+    headers: authHeaders(),
+  });
+  return [
+    {
+      id: "new_device",
+      label: "Email me when a new device signs in",
+      hint: "Sent within seconds of the session starting",
+      enabled: p.alertNewDevice,
+    },
+    {
+      id: "large_transfer",
+      label: "Email me for transfers above ₹50,000",
+      hint: "Receipt plus the device that approved it",
+      enabled: p.alertLargeTransfer,
+    },
+    {
+      id: "blocked",
+      label: "Email me when we block a sign-in",
+      hint: "Includes the signal that triggered the block",
+      enabled: p.alertBlockedSignIn,
+    },
+    {
+      id: "product",
+      label: "Product updates from NovaBank",
+      hint: "Roughly once a month. No marketing blasts.",
+      enabled: p.alertProductUpdates,
+    },
+  ];
+}
+
+export async function putNotificationPrefs(
+  prefs: Partial<{
+    alertNewDevice: boolean;
+    alertLargeTransfer: boolean;
+    alertBlockedSignIn: boolean;
+    alertProductUpdates: boolean;
+  }>,
+): Promise<PrefBackend> {
+  return apiFetch<PrefBackend>("/security/notification-prefs", {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(prefs),
+  });
+}
+
+export interface TrustedDevice {
+  id: string;
+  deviceName: string;
+  deviceInfo: string;
+  ipAddress: string;
+  ipMasked: string;
+  location: string | null;
+  lastSeen: string;
+  createdAt: string;
+  isCurrent: boolean;
+}
+
+export async function getDevices(): Promise<TrustedDevice[]> {
   const res = await apiFetch<{
     devices: {
       id: string;
+      deviceName: string;
       deviceInfo: string;
       ipAddress: string;
+      ipMasked: string;
       location: string | null;
       lastSeen: string;
       createdAt: string;
+      isCurrent: boolean;
     }[];
   }>("/security/devices", { headers: authHeaders() });
   return res.devices;

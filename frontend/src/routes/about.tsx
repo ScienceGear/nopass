@@ -13,7 +13,7 @@ export const Route = createFileRoute("/about")({
           "NovaBank is a demo of passwordless banking built on passkeys and live risk scoring.",
       },
       { property: "og:title", content: "About NovaBank" },
-      { property: "og:description", content: "Banking that can't be phished — a demo product." },
+      { property: "og:description", content: "Banking that can't be phished  a demo product." },
     ],
   }),
   component: About,
@@ -37,7 +37,7 @@ function About() {
           <Reveal delay={140}>
             <p className="mx-auto mt-5 max-w-[32rem] text-sm leading-relaxed text-muted-foreground sm:text-base">
               NovaBank is a working demo: real passkeys (WebAuthn), a real risk engine, real
-              sessions — and no password anywhere in the stack.
+              sessions  and no password anywhere in the stack.
             </p>
           </Reveal>
           <Reveal delay={200}>

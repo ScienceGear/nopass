@@ -11,7 +11,7 @@ import { formatINR } from "@/lib/api";
 export const Route = createFileRoute("/accounts")({
   head: () => ({
     meta: [
-      { title: "Accounts & cards — NovaBank" },
+      { title: "Accounts & cards  NovaBank" },
       {
         name: "description",
         content: "Your Everyday account and any cards attached to it.",
@@ -86,7 +86,7 @@ function Accounts() {
                   <EmptyState
                     icon={<CreditCard />}
                     title="No cards yet"
-                    description="Cards arrive with your account in the next milestone — transfers work today."
+                    description="Cards arrive with your account in the next milestone  transfers work today."
                   />
                 </div>
               </Panel>

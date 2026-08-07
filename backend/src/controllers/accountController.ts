@@ -89,7 +89,7 @@ export const transactions: RequestHandler = asyncHandler(async (req, res) => {
 /**
  * Transfers run through the SAME decision function as login (`evaluateRisk`).
  * The amount contributes an `amountRisk` floor, and the device/IP/behavioural
- * context comes from `assessContext` — one set of bands for every action.
+ * context comes from `assessContext`  one set of bands for every action.
  */
 export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "Not authenticated.");

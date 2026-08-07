@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "NovaBank passwordless banking backend — Express + PostgreSQL + Redis + WebAuthn",
+  "description": "NovaBank passwordless banking backend  Express + PostgreSQL + Redis + WebAuthn",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

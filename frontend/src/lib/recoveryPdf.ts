@@ -1,7 +1,7 @@
 /**
  * Minimal dependency-free PDF builder for recovery codes. Generates a valid
  * single-page PDF (Courier, A4-ish) listing the one-time codes so users can
- * store them offline — this is the only export path, the server never returns
+ * store them offline  this is the only export path, the server never returns
  * plaintext codes after signup.
  */
 

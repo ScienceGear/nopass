@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * NovaBank design system — cobalt blue / navy / white "quiet luxury" fintech.
+ * NovaBank design system  cobalt blue / navy / white "quiet luxury" fintech.
  * All colors are oklch tokens. Never hardcode colors in components.
  */
 
@@ -169,7 +169,7 @@
   filter: blur(48px) saturate(1.15);
 }
 
-/* Fine paper grain — kills the flat "AI gradient" look */
+/* Fine paper grain  kills the flat "AI gradient" look */
 @utility nova-grain {
   position: relative;
   isolation: isolate;

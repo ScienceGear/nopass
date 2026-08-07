@@ -6,12 +6,12 @@ import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/
 export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
-      { title: "Pricing — NovaBank" },
+      { title: "Pricing  NovaBank" },
       {
         name: "description",
         content: "No monthly fees, no minimums, no fine print. Bank for free with a passkey.",
       },
-      { property: "og:title", content: "Pricing — NovaBank" },
+      { property: "og:title", content: "Pricing  NovaBank" },
       { property: "og:description", content: "Free forever. No password required." },
     ],
   }),
@@ -45,7 +45,7 @@ function Pricing() {
           <Reveal delay={140}>
             <p className="mx-auto mt-5 max-w-[30rem] text-sm leading-relaxed text-muted-foreground sm:text-base">
               No monthly fees. No minimum balance. No fine print. The risk engine, the passkeys, the
-              alerts — all included.
+              alerts  all included.
             </p>
           </Reveal>
         </section>
@@ -80,7 +80,7 @@ function Pricing() {
             <SectionHeading
               eyebrow="Why it's free"
               title="Free is the point"
-              sub="If a password is the only thing between you and your money, that security is free — so it should be the price."
+              sub="If a password is the only thing between you and your money, that security is free  so it should be the price."
             />
           </Reveal>
           <div className="mt-12 grid gap-4 md:grid-cols-3">

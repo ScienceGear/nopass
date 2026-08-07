@@ -1,5 +1,5 @@
 /**
- * NovaBank seed — populates a registered account with realistic history.
+ * NovaBank seed  populates a registered account with realistic history.
  *
  * Register a real passkey through the app first, then run:
  *   npm run db:seed
@@ -13,9 +13,9 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const MERCHANTS: Array<{ name: string; category: string; amount: number; credit?: boolean }> = [
-  { name: "Payroll — Prathamesh Ventures", category: "salary", amount: 120000, credit: true },
+  { name: "Payroll  Prathamesh Ventures", category: "salary", amount: 120000, credit: true },
   { name: "Zomato", category: "food", amount: 845 },
-  { name: "Rent — Lotus Residency", category: "utilities", amount: 18500 },
+  { name: "Rent  Lotus Residency", category: "utilities", amount: 18500 },
   { name: "Swiggy Instamart", category: "food", amount: 412 },
   { name: "Uber", category: "transport", amount: 236 },
   { name: "Jio Fiber", category: "utilities", amount: 1199 },
@@ -26,9 +26,9 @@ const MERCHANTS: Array<{ name: string; category: string; amount: number; credit?
   { name: "Rohan's NRE Top-up", category: "transfer", amount: 25000 },
   { name: "BigBasket", category: "food", amount: 987 },
   { name: "Ola", category: "transport", amount: 184 },
-  { name: "Electricity — MSEDCL", category: "utilities", amount: 2310 },
+  { name: "Electricity  MSEDCL", category: "utilities", amount: 2310 },
   { name: "BookMyShow", category: "food", amount: 640 },
-  { name: "Fuel — HPCL", category: "transport", amount: 3200 },
+  { name: "Fuel  HPCL", category: "transport", amount: 3200 },
   { name: "Referral bonus", category: "salary", amount: 5000, credit: true },
 ];
 
@@ -49,7 +49,7 @@ const DEVICES = [
 async function main() {
   const users = await prisma.user.findMany({ include: { transactions: true } });
   if (users.length === 0) {
-    console.log("No users yet — register a passkey through the app first, then re-run the seed.");
+    console.log("No users yet  register a passkey through the app first, then re-run the seed.");
     return;
   }
 
@@ -70,7 +70,7 @@ async function main() {
           userId: user.id,
           recipient: m.name,
           amount: m.credit ? m.amount : -m.amount,
-          note: m.credit ? null : `${m.category} — ${new Date(now - daysAgo * day).toLocaleDateString("en-IN")}`,
+          note: m.credit ? null : `${m.category}  ${new Date(now - daysAgo * day).toLocaleDateString("en-IN")}`,
           status: "completed",
           createdAt: new Date(now - daysAgo * day),
         },

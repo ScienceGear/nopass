@@ -133,9 +133,7 @@ async function completeLogin(
     });
   }
 
-  const accessToken = signAccessToken({ sub: user.id, email: user.email });
   const refreshToken = signRefreshToken({ sub: user.id, email: user.email });
-
   const session = await prisma.session.create({
     data: {
       userId: user.id,
@@ -147,6 +145,8 @@ async function completeLogin(
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
     },
   });
+
+  const accessToken = signAccessToken({ sub: user.id, email: user.email, sessionId: session.id });
 
   await prisma.loginHistory.create({
     data: {
@@ -191,7 +191,7 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     if (existing.emailVerified) {
-      throw new AppError(409, "This email is already verified — sign in to finish setting up your account.", {
+      throw new AppError(409, "This email is already verified  sign in to finish setting up your account.", {
         code: "ONBOARDING_INCOMPLETE",
         currentStep: existing.onboardingStep,
       });
@@ -255,9 +255,8 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
   }
 
   await prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } });
-  const accessToken = signAccessToken({ sub: record.user.id, email: record.user.email });
   const refreshToken = signRefreshToken({ sub: record.user.id, email: record.user.email });
-  await prisma.session.create({
+  const session = await prisma.session.create({
     data: {
       userId: record.user.id,
       refreshToken: sha256(refreshToken),
@@ -267,6 +266,7 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
     },
   });
+  const accessToken = signAccessToken({ sub: record.user.id, email: record.user.email, sessionId: session.id });
   const user = await prisma.user.findUniqueOrThrow({ where: { id: record.userId } });
   res.json({
     ok: true,
@@ -372,7 +372,7 @@ export const registerOptions: RequestHandler = asyncHandler(async (req, res) => 
   const normalizedEmail = email.trim().toLowerCase();
   const user = await prisma.user.findUnique({ where: { email: normalizedEmail }, include: { credentials: true } });
   if (!user || !user.emailVerified) {
-    throw new AppError(403, "Verify your email first — we emailed you a link. Check your inbox.", { code: "EMAIL_UNVERIFIED" });
+    throw new AppError(403, "Verify your email first  we emailed you a link. Check your inbox.", { code: "EMAIL_UNVERIFIED" });
   }
   if (user.onboardingStep !== "email_pending" || req.userId !== user.id) {
     throw new AppError(409, "Continue registration through the secure onboarding flow.", {
@@ -380,7 +380,7 @@ export const registerOptions: RequestHandler = asyncHandler(async (req, res) => 
       currentStep: user.onboardingStep,
     });
   }
-  if (user.credentials.length > 0) throw new AppError(409, "Account already registered — try logging in.");
+  if (user.credentials.length > 0) throw new AppError(409, "Account already registered  try logging in.");
 
   const options = await buildRegistrationOptions(normalizedEmail, name.trim());
   res.json({ options, email: normalizedEmail });
@@ -393,7 +393,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
     where: { email: normalizedEmail },
     include: { credentials: true },
   });
-  if (!user) throw new AppError(404, "Start signup first — we need to verify your email.");
+  if (!user) throw new AppError(404, "Start signup first  we need to verify your email.");
   if (!user.emailVerified) throw new AppError(403, "Your email isn't verified yet.", { code: "EMAIL_UNVERIFIED" });
   if (user.onboardingStep !== "email_pending" || req.userId !== user.id) {
     throw new AppError(409, "Continue registration through the secure onboarding flow.", {
@@ -401,7 +401,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
       currentStep: user.onboardingStep,
     });
   }
-  if (user.credentials.length > 0) throw new AppError(409, "This account already has a passkey — log in instead.");
+  if (user.credentials.length > 0) throw new AppError(409, "This account already has a passkey  log in instead.");
 
   const { name: verifiedName, credential: cred, deviceType, backedUp } = await verifyRegistrationResponseCredential(
     normalizedEmail,
@@ -441,10 +441,8 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
     data: hashes.map((codeHash) => ({ userId: user.id, codeHash })),
   });
 
-  const accessToken = signAccessToken({ sub: user.id, email: user.email });
   const refreshToken = signRefreshToken({ sub: user.id, email: user.email });
-
-  await prisma.session.create({
+  const session = await prisma.session.create({
     data: {
       userId: user.id,
       refreshToken: sha256(refreshToken),
@@ -454,6 +452,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
     },
   });
+  const accessToken = signAccessToken({ sub: user.id, email: user.email, sessionId: session.id });
 
   await prisma.loginHistory.create({
     data: {
@@ -490,7 +489,7 @@ export const loginOptions: RequestHandler = asyncHandler(async (req, res) => {
     include: { credentials: true },
   });
   if (!user) throw new AppError(404, "No account found with this email. Sign up first.");
-  if (!user.emailVerified) throw new AppError(403, "Verify your email before signing in — we emailed you a link.", { code: "EMAIL_UNVERIFIED" });
+  if (!user.emailVerified) throw new AppError(403, "Verify your email before signing in  we emailed you a link.", { code: "EMAIL_UNVERIFIED" });
 
   const credentials = buildUserCredentialsFromDb(user.credentials);
   if (credentials.length === 0) {
@@ -545,18 +544,22 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
   const input = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk(input);
 
-  await prisma.loginHistory.create({
-    data: {
-      userId: user.id,
-      eventType: "login",
-      deviceInfo: body.deviceInfo,
-      ipAddress: ip,
-      location: input.location,
-      riskScore: assessment.score,
-      riskAction: assessment.action,
-      details: JSON.stringify({ signals: assessment.signals, lat: null, lon: null }),
-    },
-  });
+  // Record non-granted attempts here. Successful logins are recorded by
+  // completeLogin with the real session id attached.
+  if (assessment.action !== "allow") {
+    await prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        eventType: "login",
+        deviceInfo: body.deviceInfo,
+        ipAddress: ip,
+        location: input.location,
+        riskScore: assessment.score,
+        riskAction: assessment.action,
+        details: JSON.stringify({ signals: assessment.signals, lat: null, lon: null }),
+      },
+    });
+  }
 
   if (assessment.action === "block") {
     await sendAlertEmail(email, "NovaBank blocked a sign-in attempt", `We blocked a sign-in from ${body.deviceInfo} (${ip}). If this was you, contact support.`);
@@ -688,7 +691,7 @@ export const verifyEmailLogin: RequestHandler = asyncHandler(async (req, res) =>
   res.json({ verified: true, accessToken, refreshToken, user: outUser });
 });
 
-/** Redeem a single-use recovery code — the last-resort passwordless path. */
+/** Redeem a single-use recovery code  the last-resort passwordless path. */
 export const recoverLogin: RequestHandler = asyncHandler(async (req, res) => {
   const body = recoveryLoginSchema.parse(req.body);
   const email = body.email.trim().toLowerCase();
@@ -730,7 +733,7 @@ export const recoverLogin: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// PHONE (SMS) OTP — verification, number change, signup, step-up
+// PHONE (SMS) OTP  verification, number change, signup, step-up
 // ---------------------------------------------------------------------------
 
 function maskPhone(phone: string): string {
@@ -1067,7 +1070,7 @@ export const refresh: RequestHandler = asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user) throw new AppError(404, "User not found.");
 
-  const newAccess = signAccessToken({ sub: user.id, email: user.email });
+  const newAccess = signAccessToken({ sub: user.id, email: user.email, sessionId: session.id });
   const newRefresh = signRefreshToken({ sub: user.id, email: user.email });
 
   await prisma.session.update({

@@ -37,7 +37,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Open a NovaBank account — no password needed" },
+      { title: "Open a NovaBank account  no password needed" },
       {
         name: "description",
         content:
@@ -59,7 +59,7 @@ const signupTips: AuthTip[] = [
   {
     icon: <Sparkles className="size-4" />,
     title: "Two fields, one scan",
-    body: "Name, email and a passkey — that's the whole signup.",
+    body: "Name, email and a passkey  that's the whole signup.",
   },
   {
     icon: <ShieldCheck className="size-4" />,
@@ -111,7 +111,7 @@ function Signup() {
         const status = await postRegisterStatus(email);
         if (!cancelled && status.verified) setEmailVerified(true);
       } catch {
-        /* transient — keep polling */
+        /* transient  keep polling */
       }
     };
     const timer = setInterval(check, 3000);
@@ -237,7 +237,7 @@ function Signup() {
       <AuthSplit
         eyebrow="No password required"
         headline="Two fields. One scan. You're in."
-        subline="We only need a name and an email. Your passkey is created on your device — never on our servers."
+        subline="We only need a name and an email. Your passkey is created on your device  never on our servers."
         badge={
           <span className="eyebrow">
             Step {Math.min(step, 3)} of {progressTotal === 4 ? "4" : "3"}
@@ -330,7 +330,7 @@ function Signup() {
                     We sent a verification link to{" "}
                     <span className="font-medium text-ink">{email}</span> and a code to{" "}
                     <span className="font-medium text-ink">{phone}</span>. It expires in 15
-                    minutes — we&apos;ll carry on automatically once both are confirmed.
+                    minutes  we&apos;ll carry on automatically once both are confirmed.
                   </p>
                 </div>
 
@@ -460,7 +460,7 @@ function Signup() {
                   ← Back
                 </button>
 
-                {/* Why no password — expandable */}
+                {/* Why no password  expandable */}
                 <button
                   type="button"
                   onClick={() => setWhy((v) => !v)}
@@ -474,7 +474,7 @@ function Signup() {
                 {why ? (
                   <p className="text-left text-sm leading-relaxed text-muted-foreground">
                     Passwords get reused, guessed and phished. A passkey can&apos;t be typed into a
-                    fake site — it only works on the real NovaBank domain, and it never leaves your
+                    fake site  it only works on the real NovaBank domain, and it never leaves your
                     device.
                   </p>
                 ) : null}
@@ -488,7 +488,7 @@ function Signup() {
                   <h1 className="text-2xl">Account created</h1>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     Save these 10 recovery codes somewhere offline. They&apos;re the only way back
-                    in if you ever lose every device. We don&apos;t store them — this is the only
+                    in if you ever lose every device. We don&apos;t store them  this is the only
                     time you&apos;ll see them.
                   </p>
                 </div>
@@ -506,7 +506,7 @@ function Signup() {
                   Download as PDF
                 </Button>
                 <Button size="lg" className="w-full" onClick={() => navigate({ to: "/dashboard" })}>
-                  I&apos;ve saved these — go to my account <ArrowRight className="size-4" />
+                  I&apos;ve saved these  go to my account <ArrowRight className="size-4" />
                 </Button>
               </div>
             )}

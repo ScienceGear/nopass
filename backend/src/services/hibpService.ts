@@ -5,7 +5,7 @@ import { logger } from "../utils/logger.js";
 /**
  * Have-I-Been-Pwned k-anonymity breach check.
  * Sends only the first 5 hex chars of the SHA-1 hash; the suffix is matched
- * client-side. Never throws — returns null when the lookup fails.
+ * client-side. Never throws  returns null when the lookup fails.
  */
 export async function checkEmailBreach(email: string): Promise<number | null> {
   try {

@@ -8,7 +8,7 @@ export type PasskeyPhase = "idle" | "waiting" | "success" | "error";
 
 /**
  * The single passkey-verification surface. Used at signup, login and transfer
- * step-up — one component, three trigger points.
+ * step-up  one component, three trigger points.
  * Full-screen sheet on mobile, centered dialog on desktop.
  */
 export function PasskeyPrompt({

@@ -32,7 +32,7 @@ const onboardingTips: AuthTip[] = [
   {
     icon: <Fingerprint className="size-4" />,
     title: "Face-first security",
-    body: "Set up a passkey — your biometrics never leave your device.",
+    body: "Set up a passkey  your biometrics never leave your device.",
   },
   {
     icon: <ImageIcon className="size-4" />,
@@ -175,7 +175,7 @@ function Onboarding() {
               </span>
               <h1 className="pt-4 text-2xl">Welcome, {status.name.split(" ")[0]}</h1>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                Your account is live. We&apos;ve credited a demo balance so you can explore — park
+                Your account is live. We&apos;ve credited a demo balance so you can explore  park
                 it, spend it, or just admire how fast passkey sign-in is.
               </p>
               <div className="mx-auto mt-5 max-w-xs rounded-2xl bg-muted p-4">
@@ -281,7 +281,7 @@ function Onboarding() {
                   />
                   <span>
                     I have saved these 10 recovery codes somewhere offline. NovaBank does not store
-                    them in plaintext — this is the only way to get back into my account if I lose
+                    them in plaintext  this is the only way to get back into my account if I lose
                     every device.
                   </span>
                 </label>

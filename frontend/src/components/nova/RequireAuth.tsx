@@ -10,7 +10,7 @@ import { useSession } from "@/lib/session";
  * and after hydration it either renders the children or redirects to /login,
  * remembering where the user was headed so login can send them back.
  *
- * This is a UX layer only — every private API endpoint is independently
+ * This is a UX layer only  every private API endpoint is independently
  * protected by JWT auth on the backend, so unauthenticated calls always fail.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {

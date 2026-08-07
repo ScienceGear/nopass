@@ -14,7 +14,7 @@ function base(): RiskInput {
   };
 }
 
-describe("evaluateRisk — bands", () => {
+describe("evaluateRisk  bands", () => {
   it("allows a clean, known-device login (score ≤ 30)", () => {
     const r = evaluateRisk(base());
     assert.equal(r.action, "allow");
@@ -53,7 +53,7 @@ describe("evaluateRisk — bands", () => {
   });
 });
 
-describe("evaluateRisk — signal semantics", () => {
+describe("evaluateRisk  signal semantics", () => {
   it("applies impossible_travel weight of 40", () => {
     const r = evaluateRisk({ ...base(), impossibleTravel: true });
     assert.equal(r.score, 40);
@@ -63,7 +63,7 @@ describe("evaluateRisk — signal semantics", () => {
   it("adds was_pasted weight of 15", () => {
     const r = evaluateRisk({ ...base(), wasPasted: true });
     assert.equal(r.score, 15);
-    assert.equal(r.action, "allow"); // weak on its own — combination is what matters
+    assert.equal(r.action, "allow"); // weak on its own  combination is what matters
   });
 
   it("suppresses keystroke anomaly during cold start", () => {
@@ -92,7 +92,7 @@ describe("evaluateRisk — signal semantics", () => {
   });
 });
 
-describe("amountRisk — transfer tiers", () => {
+describe("amountRisk  transfer tiers", () => {
   it("returns 0 for everyday amounts", () => {
     assert.equal(amountRisk(100), 0);
     assert.equal(amountRisk(50_000), 0);

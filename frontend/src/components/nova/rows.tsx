@@ -138,6 +138,11 @@ export function ActivityRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">
             {event.device}
+            {event.isCurrent ? (
+              <span className="ml-2 inline-block rounded-full bg-lime-soft px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-ink">
+                This device
+              </span>
+            ) : null}
             <span className="font-normal text-muted-foreground"> · {event.city}</span>
           </p>
           <p className="truncate font-mono text-[0.6875rem] tracking-[0.04em] text-muted-foreground">

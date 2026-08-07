@@ -15,7 +15,7 @@ export const Route = createFileRoute("/contact")({
       { title: "Contact NovaBank" },
       {
         name: "description",
-        content: "Reach NovaBank support — a real human answers, usually within a day.",
+        content: "Reach NovaBank support  a real human answers, usually within a day.",
       },
       { property: "og:title", content: "Contact us" },
     ],
@@ -37,7 +37,7 @@ function Contact() {
     }
     setBusy(true);
     const subject = encodeURIComponent(`NovaBank message from ${name.trim()}`);
-    const body = encodeURIComponent(`${message.trim()}\n\n— ${name.trim()} (${email.trim()})`);
+    const body = encodeURIComponent(`${message.trim()}\n\n ${name.trim()} (${email.trim()})`);
     window.location.href = `mailto:${support.email}?subject=${subject}&body=${body}`;
     toast.success("Opening your mail app…");
     setBusy(false);
@@ -59,7 +59,7 @@ function Contact() {
           </Reveal>
           <Reveal delay={140}>
             <p className="mx-auto mt-5 max-w-[32rem] text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Questions about passkeys, your sessions, or the demo itself — write to us and
+              Questions about passkeys, your sessions, or the demo itself  write to us and
               we&apos;ll reply, usually within a day.
             </p>
           </Reveal>
@@ -129,7 +129,7 @@ function Contact() {
                 {
                   icon: <MapPin className="size-4" />,
                   label: "Registered to",
-                  value: "A demo project — not a licensed bank",
+                  value: "A demo project  not a licensed bank",
                 },
               ].map((r) => (
                 <div key={r.label} className="flex items-start gap-4 rounded-3xl bg-muted p-5">

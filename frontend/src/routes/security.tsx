@@ -6,7 +6,7 @@ import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/
 export const Route = createFileRoute("/security")({
   head: () => ({
     meta: [
-      { title: "How passkey security works — NovaBank" },
+      { title: "How passkey security works  NovaBank" },
       {
         name: "description",
         content:
@@ -27,7 +27,7 @@ const layers = [
     icon: <Fingerprint />,
     title: "Passkeys, not passwords",
     description:
-      "Your private key never leaves the secure chip on your device. There is no password in our database — nothing to leak, nothing to phish.",
+      "Your private key never leaves the secure chip on your device. There is no password in our database  nothing to leak, nothing to phish.",
   },
   {
     icon: <Waves />,

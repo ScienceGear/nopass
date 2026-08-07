@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 export interface TokenPayload {
   sub: string; // user id
   email: string;
+  sessionId?: string;
 }
 
 /** Argon2id verify for opaque one-time secrets (recovery codes, OTPs). */

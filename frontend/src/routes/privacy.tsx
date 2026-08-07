@@ -6,7 +6,7 @@ import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/
 export const Route = createFileRoute("/privacy")({
   head: () => ({
     meta: [
-      { title: "Privacy — NovaBank" },
+      { title: "Privacy  NovaBank" },
       {
         name: "description",
         content: "What NovaBank stores, what it never sees, and how your data is protected.",
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/privacy")({
 const sections = [
   {
     title: "What we store",
-    body: "Your name, email, the public half of your passkeys, device identifiers, and a log of sign-ins and transfers. That is the complete list — there is no hidden profiling.",
+    body: "Your name, email, the public half of your passkeys, device identifiers, and a log of sign-ins and transfers. That is the complete list  there is no hidden profiling.",
   },
   {
     title: "What we never store",
@@ -28,7 +28,7 @@ const sections = [
   },
   {
     title: "Why we log sign-ins",
-    body: "Every session is scored by our risk engine — device, location, typing rhythm and frequency. That history powers the security alerts you see, and you can read the full log on your Activity page.",
+    body: "Every session is scored by our risk engine  device, location, typing rhythm and frequency. That history powers the security alerts you see, and you can read the full log on your Activity page.",
   },
   {
     title: "Signals we don't collect",
@@ -36,7 +36,7 @@ const sections = [
   },
   {
     title: "Session control",
-    body: "You can revoke any session — or every session at once — from the Activity page. A confirmation email is sent whenever a session is signed in from an unusual place.",
+    body: "You can revoke any session  or every session at once  from the Activity page. A confirmation email is sent whenever a session is signed in from an unusual place.",
   },
   {
     title: "Contact",
@@ -109,7 +109,7 @@ function Privacy() {
           <Reveal delay={80} className="mt-10 flex justify-center">
             <Button asChild>
               <Link to="/signup">
-                Try it — nothing to hide <ArrowRight className="size-4" />
+                Try it  nothing to hide <ArrowRight className="size-4" />
               </Link>
             </Button>
           </Reveal>

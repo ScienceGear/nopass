@@ -128,7 +128,7 @@ function DesktopQr() {
         </PillBadge>
         <h1 className="mt-4 text-2xl">Scan with your phone to sign in</h1>
         <p className="mx-auto mt-2 max-w-[22rem] text-sm leading-relaxed text-muted-foreground">
-          Your phone holds the passkey. This screen never sees it — it only learns that your phone
+          Your phone holds the passkey. This screen never sees it  it only learns that your phone
           said yes.
         </p>
 

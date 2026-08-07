@@ -13,7 +13,7 @@ export const Route = createFileRoute("/verify-email")({
   },
   head: () => ({
     meta: [
-      { title: "Verify your email — NovaBank" },
+      { title: "Verify your email  NovaBank" },
       {
         name: "description",
         content: "Confirm your email address to finish opening your NovaBank account.",
@@ -43,7 +43,7 @@ function VerifyEmail() {
         const res = await postVerifyEmail(token);
         if (cancelled) return;
         setStatus("verified");
-        toast.success("Email verified", { description: `Thanks — ${res.email} is confirmed.` });
+        toast.success("Email verified", { description: `Thanks  ${res.email} is confirmed.` });
         void navigate({ to: "/onboarding" });
       } catch (err) {
         if (cancelled) return;

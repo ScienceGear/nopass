@@ -21,7 +21,7 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-/** Free-tier geolocation. Never throws — returns null on any failure. */
+/** Free-tier geolocation. Never throws  returns null on any failure. */
 export async function geoFromIp(ip: string): Promise<GeoInfo | null> {
   if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
     return { city: "Localhost", country: "Local", countryCode: "LOCAL" };

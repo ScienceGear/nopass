@@ -24,13 +24,13 @@ import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NovaBank — Banking that can't be phished" },
+      { title: "NovaBank  Banking that can't be phished" },
       {
         name: "description",
         content:
-          "Open a NovaBank account in two minutes. No password to steal, no OTP to intercept — just your face, your device, and a risk engine that never sleeps.",
+          "Open a NovaBank account in two minutes. No password to steal, no OTP to intercept  just your face, your device, and a risk engine that never sleeps.",
       },
-      { property: "og:title", content: "NovaBank — Banking that can't be phished" },
+      { property: "og:title", content: "NovaBank  Banking that can't be phished" },
       {
         property: "og:description",
         content:
@@ -130,7 +130,7 @@ function Home() {
             <Reveal delay={140}>
               <p className="mt-5 max-w-[32rem] text-[0.95rem] leading-relaxed text-muted-foreground sm:text-base">
                 NovaBank replaces passwords with passkeys sealed inside your device, then scores
-                every sign-in and transfer on how it actually behaves — not on what someone typed.
+                every sign-in and transfer on how it actually behaves  not on what someone typed.
               </p>
             </Reveal>
 

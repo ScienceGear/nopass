@@ -1,4 +1,4 @@
-# NovaBank backend — dev image (tsx watch)
+# NovaBank backend  dev image (tsx watch)
 FROM node:22-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json ./

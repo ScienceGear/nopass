@@ -37,7 +37,7 @@ function Admin() {
                   <Icon className="size-5" />
                   <div>
                     <p className="eyebrow">{label}</p>
-                    <p className="tnum text-2xl font-bold">{totals?.[key] ?? "—"}</p>
+                    <p className="tnum text-2xl font-bold">{totals?.[key] ?? ""}</p>
                   </div>
                 </div>
               </Panel>

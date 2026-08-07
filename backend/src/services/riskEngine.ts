@@ -37,7 +37,7 @@ export interface RiskInput {
   amountRisk?: number;
 }
 
-// Signal weights — tuned so a single strong signal triggers step-up but only
+// Signal weights  tuned so a single strong signal triggers step-up but only
 // combinations of independent signals escalate to image challenge / block.
 // Bands: ≤30 allow · 31–60 step-up · 61–80 image challenge · >80 block.
 const SIGNALS: { name: RiskSignal["name"]; weight: number; enabled: (i: RiskInput) => boolean; reason: (i: RiskInput) => string }[] = [
@@ -54,7 +54,7 @@ const SIGNALS: { name: RiskSignal["name"]; weight: number; enabled: (i: RiskInpu
 
 /**
  * The single risk decision function. Both the login routes and the transaction
- * routes build a `RiskInput` and call this — one set of thresholds, one
+ * routes build a `RiskInput` and call this  one set of thresholds, one
  * decision, reused everywhere.
  */
 export function evaluateRisk(input: RiskInput): RiskAssessment {

@@ -10,7 +10,7 @@ export const authLimiter = rateLimit({
 });
 
 /**
- * Stricter limiter for credential/OTP routes — 5 requests per 15 minutes,
+ * Stricter limiter for credential/OTP routes  5 requests per 15 minutes,
  * keyed per IP * email so one account can't be hammered while others stay up.
  */
 export const otpLimiter = rateLimit({
@@ -58,7 +58,7 @@ export const transferLimiter = rateLimit({
 });
 
 /**
- * Burst limiter for SMS/phone OTP routes — keyed per IP * phone. The daily
+ * Burst limiter for SMS/phone OTP routes  keyed per IP * phone. The daily
  * 6-SMS quota is enforced inside smsService (Redis), this only stops flooders.
  */
 export const phoneOtpLimiter = rateLimit({

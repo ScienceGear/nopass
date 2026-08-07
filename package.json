@@ -2,7 +2,7 @@
   "name": "novabank",
   "version": "1.0.0",
   "private": true,
-  "description": "NovaBank passwordless banking demo — backend + frontend",
+  "description": "NovaBank passwordless banking demo  backend + frontend",
   "scripts": {
     "dev": "node dev.mjs",
     "prepare": "husky",

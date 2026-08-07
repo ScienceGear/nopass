@@ -9,7 +9,7 @@ import { logger } from "../utils/logger.js";
  * Image-sequence step-up (Phase 8). A "click-in-region" challenge:
  * the user must click three objects on a scene in the prompted order.
  * The sequence is stored server-side (Redis, single-use, 5-min TTL) and
- * verified against the pool's bounding boxes with a tolerance — replaying
+ * verified against the pool's bounding boxes with a tolerance  replaying
  * an old response fails because the token is deleted on first use.
  */
 
@@ -59,7 +59,7 @@ const MAX_ATTEMPTS = 3;
 const TOLERANCE = 0.06;
 
 // ---------------------------------------------------------------------------
-// Scene pool — procedurally drawn, fixed bounding boxes. Every object the
+// Scene pool  procedurally drawn, fixed bounding boxes. Every object the
 // prompt can reference must be a distinct, recognisable shape.
 // ---------------------------------------------------------------------------
 

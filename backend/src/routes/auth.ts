@@ -28,7 +28,7 @@ router.post("/login/email-otp", otpLimiter, auth.requestEmailLogin);
 router.post("/login/email-otp/verify", otpLimiter, auth.verifyEmailLogin);
 router.post("/login/recovery-code", otpLimiter, auth.recoverLogin);
 
-// Phone (SMS) OTP — signup verification, phone change, step-up, recovery
+// Phone (SMS) OTP  signup verification, phone change, step-up, recovery
 router.post("/phone-otp/request", phoneOtpLimiter, optionalAuth, auth.requestPhoneOtp);
 router.post("/phone-otp/verify", phoneOtpLimiter, optionalAuth, auth.verifyPhoneOtpRoute);
 router.post("/login/phone-otp", phoneOtpLimiter, auth.requestPhoneLogin);

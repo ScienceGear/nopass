@@ -10,6 +10,7 @@ declare global {
     interface Request {
       userId?: string;
       authEmail?: string;
+      sessionId?: string;
     }
   }
 }
@@ -31,6 +32,7 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, _res, next) 
 
   req.userId = user.id;
   req.authEmail = user.email;
+  req.sessionId = payload.sessionId;
   next();
 });
 
