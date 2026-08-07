@@ -37,7 +37,7 @@ export function AuthSplit({
   return (
     <div
       className={cn(
-        "relative grid w-full bg-card lg:min-h-dvh lg:grid-cols-[1fr_1.12fr] lg:overflow-hidden lg:rounded-[2.25rem] lg:shadow-panel",
+        "relative grid h-dvh w-full overflow-hidden bg-card lg:grid-cols-[1fr_1.12fr] lg:rounded-[2.25rem] lg:shadow-panel",
         className,
       )}
     >
@@ -89,12 +89,12 @@ export function AuthSplit({
         </div>
 
         <p className="relative z-10 flex items-center gap-2 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-white/45">
-          <span className="size-1.5 rounded-full bg-lime" /> 100% password-free demo
+          <span className="size-1.5 rounded-full bg-lime" /> Demo product — not a real bank
         </p>
       </aside>
 
       {/* ── Right: form panel ─────────────────────────────────────────── */}
-      <section className="relative flex min-h-dvh flex-col bg-card lg:min-h-0">
+      <section className="relative flex min-h-0 flex-col bg-card">
         {/* Mobile-only brand strip */}
         <div className="space-y-2 border-b border-hairline bg-lime-soft/60 px-5 pb-4 pt-5 lg:hidden">
           <PillBadge tone="ink" icon={<Sparkles className="size-3.5" />}>
@@ -111,12 +111,12 @@ export function AuthSplit({
           ) : null}
         </div>
 
-        <header className="flex items-center justify-between gap-3 px-5 py-3 sm:px-10 lg:px-12">
+        <header className="flex shrink-0 items-center justify-between gap-3 px-5 py-3 sm:px-10 lg:px-12">
           <Logo className="lg:hidden" />
           <div className="ml-auto flex items-center">{badge}</div>
         </header>
 
-        <main className="flex w-full flex-1 items-center justify-center px-5 pb-8 pt-2 sm:px-10 lg:px-12">
+        <main className="flex min-h-0 w-full flex-1 items-center justify-center overflow-y-auto px-5 pb-8 pt-2 sm:px-10 lg:px-12">
           {children}
         </main>
       </section>

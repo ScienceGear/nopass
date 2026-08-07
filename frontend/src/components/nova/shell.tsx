@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowUpRight, Menu, X } from "lucide-react";
+import { ArrowUpRight, Github, Menu, X } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { support } from "@/lib/config";
@@ -47,6 +47,13 @@ export function NovaBackground({ children }: { children: React.ReactNode }) {
     <div className="nova-field nova-grain min-h-screen px-0 py-0 sm:px-5 sm:py-5 lg:px-8 lg:py-8">
       {children}
     </div>
+  );
+}
+
+/** Full-viewport, no-padding background for isolated sign-in / recover screens. */
+export function AuthBackground({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="nova-field nova-grain h-dvh w-full overflow-hidden p-0">{children}</div>
   );
 }
 
@@ -123,10 +130,9 @@ export function Reveal({
 /* ── Navbar ─────────────────────────────────────────────────────────────── */
 
 const marketingLinks = [
-  { to: "/accounts", label: "Accounts" },
-  { to: "/security", label: "Security" },
+  { to: "/security", label: "How it works" },
   { to: "/about", label: "About" },
-  { to: "/pricing", label: "Pricing" },
+  { to: "/contact", label: "Contact" },
 ] as const;
 
 const appLinks = [
@@ -283,10 +289,9 @@ const footerCols = [
   {
     title: "Product",
     links: [
-      { to: "/accounts", label: "Accounts" },
-      { to: "/transfer", label: "Transfers" },
-      { to: "/activity", label: "Activity" },
-      { to: "/pricing", label: "Pricing" },
+      { to: "/signup", label: "Open an account" },
+      { to: "/login", label: "Sign in" },
+      { to: "/security", label: "How it works" },
     ],
   },
   {
@@ -317,6 +322,22 @@ const footerCols = [
 export function Footer() {
   return (
     <footer className="mt-20 border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-12">
+      <div className="mb-10 flex flex-col items-center justify-between gap-4 rounded-3xl bg-lime-soft p-6 sm:flex-row">
+        <div className="space-y-1 text-center sm:text-left">
+          <p className="text-sm font-bold">This is a demo product, not a real bank.</p>
+          <p className="text-sm text-muted-foreground">
+            Source code and docs below  star it if you like how it works.
+          </p>
+        </div>
+        <a
+          href="https://github.com/ScienceGear/nopass"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-lime transition-transform duration-200 hover:-translate-y-0.5"
+        >
+          <Github className="size-4" /> Star on GitHub
+        </a>
+      </div>
       <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
         {footerCols.map((col) => (
           <div key={col.title} className="min-w-0">
@@ -343,27 +364,23 @@ export function Footer() {
             to="/contact"
             className="font-mono text-[0.6875rem] tracking-[0.08em] text-muted-foreground transition-colors hover:text-ink"
           >
-            {support.phone} · {support.email}
+            {support.email}
           </Link>
           <p className="font-mono text-[0.6875rem] tracking-[0.08em] text-muted-foreground">
-            © {new Date().getFullYear()} NovaBank · Demo product, not a licensed bank
+            © {new Date().getFullYear()} NovaBank · Demo product, not a real bank
           </p>
         </div>
         <div className="flex items-center justify-center gap-2">
-          {[
-            { to: "/about", label: "X" },
-            { to: "/about", label: "IN" },
-            { to: "/about", label: "GH" },
-          ].map((s) => (
-            <Link
-              key={s.label}
-              to={s.to}
-              aria-label={`NovaBank on ${s.label}`}
-              className="grid size-8 place-items-center rounded-full bg-muted font-mono text-[0.625rem] tracking-wider text-muted-foreground transition-colors duration-200 hover:bg-lime-soft hover:text-ink"
-            >
-              {s.label}
-            </Link>
-          ))}
+          <a
+            href="https://github.com/ScienceGear/nopass"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="NovaBank source code on GitHub"
+            className="grid size-8 place-items-center rounded-full bg-muted font-mono text-[0.625rem] tracking-wider text-muted-foreground transition-colors duration-200 hover:bg-lime-soft hover:text-ink"
+            title="Star this project on GitHub"
+          >
+            GitHub
+          </a>
         </div>
       </div>
     </footer>

@@ -22,16 +22,69 @@ const COUNTRIES: Country[] = [
   { code: "SA", dial: "+966", flag: "🇸🇦", label: "Saudi Arabia" },
 ];
 
+/** Render a country flag. Emoji flags fail on Windows, so use a CDN image with emoji fallback. */
+function Flag({ code, flag, className }: { code: string; flag: string; className?: string }) {
+  const [failed, setFailed] = React.useState(false);
+  if (failed) {
+    return (
+      <span aria-hidden="true" className={cn("text-base leading-none", className)}>
+        {flag}
+      </span>
+    );
+  }
+  return (
+    <span aria-hidden="true" className={cn("inline-flex", className)}>
+      <img
+        src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
+        alt=""
+        width={20}
+        height={15}
+        className="rounded-[2px] object-cover shadow-sm"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    </span>
+  );
+}
+
 const DEFAULT_COUNTRY: Country = COUNTRIES[0]!;
 
-/** Split an E.164 value like "+919876543210" into dial code + national part. */
+/** Remove a known dial code (and any stray +/spaces) from the start of a value. */
+function stripDial(value: string, dial: string): string {
+  const compact = value.replace(/\s/g, "");
+  const dialDigits = dial.replace("+", "");
+  if (compact.startsWith(dialDigits)) return compact.slice(dialDigits.length);
+  if (compact.startsWith(`+${dialDigits}`)) return compact.slice(dialDigits.length + 1);
+  return compact.replace(/^\+/, "");
+}
+
+/**
+ * Parse an E.164-ish value like "+919876543210" into dial code + national part.
+ * Matches known dial codes as a prefix (longest first) so the greedy number
+ * never swallows national digits  that caused "+91 91 91" while typing.
+ */
 function parseValue(value: string): { country: Country; national: string } {
-  const trimmed = value.replace(/\s/g, "");
-  const match = trimmed.match(/^\+([0-9]+)(.*)$/);
-  if (!match) return { country: DEFAULT_COUNTRY, national: trimmed };
-  const dial = `+${match[1]}`;
-  const country = COUNTRIES.find((c) => c.dial === dial) ?? DEFAULT_COUNTRY;
-  return { country, national: country.dial === dial ? (match[2] ?? "") : trimmed };
+  const compact = value.replace(/\s/g, "");
+  if (!compact.startsWith("+")) {
+    return { country: DEFAULT_COUNTRY, national: compact.replace(/[^\d]/g, "") };
+  }
+  const digits = compact.slice(1);
+  const matched = [...COUNTRIES]
+    .sort((a, b) => b.dial.length - a.dial.length)
+    .find((c) => digits.startsWith(c.dial.replace("+", "")));
+  if (matched) {
+    return {
+      country: matched,
+      national: digits.slice(matched.dial.replace("+", "").length).replace(/[^\d]/g, ""),
+    };
+  }
+  return { country: DEFAULT_COUNTRY, national: digits.replace(/[^\d]/g, "") };
+}
+
+/** Rebuild a full value from a country + typed national digits (dedup dial). */
+function normalizeWithDial(country: Country, digits: string): string {
+  const cleaned = digits.replace(/[^\d]/g, "").slice(0, 15);
+  return `${country.dial}${cleaned}`;
 }
 
 export interface PhoneInputProps {
@@ -71,8 +124,9 @@ export function PhoneInput({
 
   function selectCountry(next: Country) {
     setOpen(false);
-    if (next.dial === country.dial) return;
-    onChange(`${next.dial}${national.replace(/^\s*/, "")}`);
+    const national = stripDial(value, country.dial);
+    if (national.trim() === "" && next.dial === country.dial) return;
+    onChange(`${next.dial}${national.replace(/\s/g, "").replace(/^\+/, "")}`);
   }
 
   return (
@@ -85,9 +139,7 @@ export function PhoneInput({
           aria-label="Select country code"
           className="flex h-12 items-center gap-1.5 rounded-l-2xl border border-r-0 border-input bg-transparent px-3 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
         >
-          <span aria-hidden="true" className="text-base leading-none">
-            {country.flag}
-          </span>
+          <Flag code={country.code} flag={country.flag} className="mt-0.5" />
           <span className="tnum">{country.dial}</span>
           <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
         </button>
@@ -109,7 +161,7 @@ export function PhoneInput({
                   c.code === country.code && "bg-lime-soft font-semibold",
                 )}
               >
-                <span aria-hidden="true">{c.flag}</span>
+                <Flag code={c.code} flag={c.flag} />
                 <span className="flex-1">{c.label}</span>
                 <span className="tnum text-muted-foreground">{c.dial}</span>
               </button>
@@ -126,8 +178,8 @@ export function PhoneInput({
         autoComplete={autoComplete}
         placeholder={placeholder}
         onChange={(e) => {
-          const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 15);
-          onChange(`${country.dial}${digits}`);
+          const digits = e.target.value.replace(/\D/g, "");
+          onChange(normalizeWithDial(country, digits));
         }}
         className="h-12 w-full rounded-r-2xl border border-input bg-transparent px-3.5 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       />

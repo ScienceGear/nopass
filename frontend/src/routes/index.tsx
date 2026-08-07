@@ -4,7 +4,6 @@ import {
   BadgeCheck,
   Fingerprint,
   Gauge,
-  Leaf,
   Lock,
   MonitorSmartphone,
   Radar,
@@ -106,18 +105,16 @@ function Home() {
             className="absolute inset-0 -z-10 bg-cover bg-center"
             style={{
               backgroundImage: "url('/background.png')",
-              backgroundPosition: "0% 100%",
-              backgroundSize: "112% 124%",
+              backgroundPosition: "center bottom",
+              backgroundSize: "cover",
               backgroundRepeat: "no-repeat",
               opacity: 0.63,
-              transform: "scale(1.12)",
-              transformOrigin: "center center",
             }}
           />
 
           <div className="relative z-10 max-w-[34rem]">
             <Reveal className="flex justify-start">
-              <PillBadge icon={<Leaf />}>Bank without a password</PillBadge>
+              <PillBadge icon={<Lock />}>Bank without a password</PillBadge>
             </Reveal>
 
             <Reveal delay={80}>

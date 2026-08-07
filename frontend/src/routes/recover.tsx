@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { ArrowRight, KeyRound, Loader2, Mail, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowRight, KeyRound, Mail, ShieldCheck, Smartphone } from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
+import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
 import { PhoneInput } from "@/components/nova/PhoneInput";
-import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
+import { AuthBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,6 +29,24 @@ export const Route = createFileRoute("/recover")({
   }),
   component: Recover,
 });
+
+const recoverTips: AuthTip[] = [
+  {
+    icon: <Mail className="size-4" />,
+    title: "Email or SMS, no password",
+    body: "We send a one-time code to the email or phone on your account.",
+  },
+  {
+    icon: <KeyRound className="size-4" />,
+    title: "Saved recovery codes",
+    body: "Have the 10 codes you saved at signup? Redeem one to sign straight back in.",
+  },
+  {
+    icon: <ShieldCheck className="size-4" />,
+    title: "Protected by risk scoring",
+    body: "Recovery attempts are checked for unusual patterns as they happen.",
+  },
+];
 
 function Recover() {
   const navigate = useNavigate();
@@ -165,51 +184,51 @@ function Recover() {
   }
 
   return (
-    <NovaBackground>
-      <PageShell className="min-h-[calc(100vh-4rem)]">
-        <header className="flex items-center justify-between py-4">
-          <Logo />
-          <PillBadge icon={<ShieldCheck />}>No password, ever</PillBadge>
-        </header>
+    <AuthBackground>
+      <AuthSplit
+        eyebrow="Account recovery"
+        headline="Recover without a password."
+        subline="Use the email or phone on your account, or a recovery code you saved. There is no password to reset  that&apos;s by design."
+        badge={
+          <PillBadge tone="white" icon={<ShieldCheck className="size-3.5" />}>
+            No password, ever
+          </PillBadge>
+        }
+        tips={recoverTips}
+      >
+        <Reveal className="w-full max-w-[27rem]">
+          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 text-center shadow-card sm:p-8">
+            <div className="space-y-2 text-center">
+              <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-lime-soft">
+                <KeyRound className="size-6" />
+              </span>
+              <h1 className="pt-2 text-2xl">Recover your account</h1>
+            </div>
 
-        <div className="flex flex-col items-center justify-center py-12 sm:py-20">
-          <Reveal className="w-full max-w-[27rem]">
-            <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card p-6 shadow-card sm:p-8">
-              <div className="space-y-2 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-lime-soft">
-                  <KeyRound className="size-6" />
-                </span>
-                <h1 className="pt-2 text-2xl">Recover your account</h1>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Lost your devices? Use the email or phone number on file, or a recovery code you
-                  saved. There is no password to reset  that&apos;s by design.
-                </p>
-              </div>
-
-              <div className="mt-6 grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1">
-                {(
-                  [
-                    ["email", "Email me a code"],
-                    ["phone", "Text me a code"],
-                    ["code", "Recovery code"],
-                  ] as const
-                ).map(([m, label]) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setMode(m);
-                      setError(null);
-                      setPhoneSent(false);
-                    }}
-                    className={`rounded-xl px-2 py-2 text-sm font-medium transition-colors ${
-                      mode === m ? "bg-card text-ink shadow-sm" : "text-muted-foreground"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+            <div className="mt-6 grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1">
+              {(
+                [
+                  ["email", "Email me a code"],
+                  ["phone", "Text me a code"],
+                  ["code", "Recovery code"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m);
+                    setError(null);
+                    setPhoneSent(false);
+                  }}
+                  className={`rounded-xl px-2 py-2 text-sm font-medium transition-colors ${
+                    mode === m ? "bg-card text-ink shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
               {mode === "email" ? (
                 sent ? (
@@ -368,8 +387,6 @@ function Recover() {
                   </Button>
                 </form>
               )}
-            </div>
-
             <p className="mt-5 text-center text-sm text-muted-foreground">
               Remember your passkey?{" "}
               <Link
@@ -379,11 +396,9 @@ function Recover() {
                 Sign in
               </Link>
             </p>
-          </Reveal>
-        </div>
-
-        <Footer />
-      </PageShell>
-    </NovaBackground>
+          </div>
+        </Reveal>
+      </AuthSplit>
+    </AuthBackground>
   );
 }

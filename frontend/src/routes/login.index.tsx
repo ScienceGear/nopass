@@ -14,7 +14,7 @@ import { Button, PillBadge, RiskBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { ImageChallenge } from "@/components/nova/ImageChallenge";
 import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
-import { NovaBackground, Reveal } from "@/components/nova/shell";
+import { AuthBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -228,7 +228,7 @@ function LoginPage() {
         );
         setShowOthers(true);
       } else {
-        setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
+        setError(friendlyWebAuthnError(err));
       }
     } finally {
       setBusy(false);
@@ -274,7 +274,7 @@ function LoginPage() {
   /* High risk -> full-screen block */
   if (result?.riskAction === "block") {
     return (
-      <NovaBackground>
+      <AuthBackground>
         <AuthSplit
           eyebrow="Risk engine"
           headline="We stopped this sign-in"
@@ -307,19 +307,19 @@ function LoginPage() {
             </div>
           </Reveal>
         </AuthSplit>
-      </NovaBackground>
+      </AuthBackground>
     );
   }
 
   return (
-    <NovaBackground>
+    <AuthBackground>
       <AuthSplit
-        eyebrow="FIDO2 passkeys"
-        headline="Sign in like it's yours -- because it is."
+        eyebrow="Passkeys"
+        headline="Sign in without a password."
         subline="One tap with Face ID, Touch ID or Windows Hello. No password, no OTP by default."
         badge={
           <PillBadge tone="white" icon={<ShieldCheck className="size-3.5" />}>
-            FIDO2 sign-in
+            Passkey sign-in
           </PillBadge>
         }
         tips={loginTips}
@@ -493,37 +493,36 @@ function LoginPage() {
                 ) : null}
               </form>
             )}
-          </div>
 
-          <p className="mt-5 text-center text-sm text-muted-foreground">
-            New here?{" "}
-            <Link
-              to="/signup"
-              className="font-semibold text-ink underline-offset-4 hover:underline"
-            >
-              Open an account
-            </Link>
-          </p>
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-center">
-            <Link
-              to="/login/approve"
-              className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-            >
-              <QrCode className="size-4" /> Sign in on another device
-              <ArrowRight className="size-3.5" />
-            </Link>
-          </p>
-          <p className="mt-2 text-center">
-            <Link
-              to="/recover"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-            >
-              Lost access? Recover your account securely
-            </Link>
-          </p>
+            {/* Quick links inside the card */}
+            <div className={"mt-6 space-y-3 border-t border-hairline pt-5"}>
+              <p className="text-sm text-muted-foreground">
+                New here?{" "}
+                <Link
+                  to="/signup"
+                  className="font-semibold text-ink underline-offset-4 hover:underline"
+                >
+                  Open an account
+                </Link>
+              </p>
+              <Link
+                to="/login/approve"
+                className="flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+              >
+                <QrCode className="size-4" /> Sign in on another device
+                <ArrowRight className="size-3.5" />
+              </Link>
+              <Link
+                to="/recover"
+                className="block text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+              >
+                Lost access? Recover your account securely
+              </Link>
+            </div>
+          </div>
         </Reveal>
       </AuthSplit>
-    </NovaBackground>
+    </AuthBackground>
   );
 }
 
@@ -549,4 +548,32 @@ function OtherMethod({
       <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
     </button>
   );
+}
+
+/** Turn raw WebAuthn/browser errors into plain language for the user. */
+function friendlyWebAuthnError(err: unknown): string {
+  if (!(err instanceof Error)) return "Sign-in failed. Please try again.";
+  const name = err.name ?? "";
+  const message = err.message ?? "";
+  const lower = `${name} ${message}`.toLowerCase();
+  if (lower.includes("notallowed") || lower.includes("timed out") || lower.includes("timeout")) {
+    return "The security prompt was closed or timed out. Try again and complete the prompt when it appears.";
+  }
+  if (lower.includes("cancel")) {
+    return "The security prompt was closed. Try again when you're ready to confirm.";
+  }
+  if (lower.includes("abort")) {
+    return "Sign-in was interrupted. Please try again.";
+  }
+  if (lower.includes("no passkey") || lower.includes("not registered") || lower.includes("notfound")) {
+    return "No passkey was found for this account on this device. Try another way to sign in below.";
+  }
+  if (lower.includes("security error") || lower.includes("attestation")) {
+    return "Your device couldn't complete the secure check. Try again or use another way to sign in.";
+  }
+  if (lower.includes("network") || lower.includes("fetch") || lower.includes("failed to load")) {
+    return "We couldn't reach the server. Check your connection and try again.";
+  }
+  if (message === "[object Object]") return "Sign-in failed. Please try again.";
+  return message;
 }

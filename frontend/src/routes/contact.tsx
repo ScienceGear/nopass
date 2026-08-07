@@ -122,14 +122,9 @@ function Contact() {
                   value: support.email,
                 },
                 {
-                  icon: <Headset className="size-4" />,
-                  label: "Support line",
-                  value: `${support.phone} (demo)`,
-                },
-                {
                   icon: <MapPin className="size-4" />,
-                  label: "Registered to",
-                  value: "A demo project  not a licensed bank",
+                  label: "Project",
+                  value: "NovaBank · a demo product, not a real bank",
                 },
               ].map((r) => (
                 <div key={r.label} className="flex items-start gap-4 rounded-3xl bg-muted p-5">

@@ -1253,11 +1253,75 @@ export async function getAdminSecurityOverview() {
       device: string;
       ipAddress: string;
       location: string | null;
+      lat: number | null;
+      lon: number | null;
       riskScore: number;
       riskAction: string;
       details: string | null;
     }[];
   }>("/admin/security-overview", { headers: authHeaders() });
+}
+
+export interface AdminUserLookup {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    phone: string | null;
+    phoneVerified: boolean;
+    emailVerified: boolean;
+    onboardingStep: string;
+    createdAt: string;
+  };
+  stats: {
+    openSessions: number;
+    passkeys: number;
+    unusedRecoveryCodes: number;
+    blockedLast7d: number;
+  };
+  sessions: {
+    id: string;
+    device: string;
+    ipAddress: string;
+    location: string | null;
+    riskScore: number;
+    revoked: boolean;
+    createdAt: string;
+    expiresAt: string;
+    active: boolean;
+  }[];
+  passkeys: { id: string; nickname: string; deviceType: string; lastUsedAt: string }[];
+  recentLogins: {
+    id: string;
+    type: string;
+    device: string;
+    ipAddress: string;
+    location: string | null;
+    riskScore: number;
+    riskAction: string;
+    createdAt: string;
+  }[];
+}
+
+export async function getAdminUserLookup(email: string) {
+  return apiFetch<AdminUserLookup>(
+    `/admin/user?email=${encodeURIComponent(email)}`,
+    { headers: authHeaders() },
+  );
+}
+
+export async function postAdminRevokeUserSessions(userId: string) {
+  return apiFetch<{ revoked: number; email: string }>(
+    `/admin/user/${encodeURIComponent(userId)}/revoke-sessions`,
+    { method: "POST", headers: authHeaders() },
+  );
+}
+
+export async function getAdminIpLookup(ip: string) {
+  return apiFetch<{
+    ip: string;
+    geo: { city?: string; country?: string; countryCode?: string; lat?: number; lon?: number } | null;
+  }>(`/admin/ip/${encodeURIComponent(ip)}`, { headers: authHeaders() });
 }
 
 /* ── Session helpers for the UI ────────────────────────────────────────── */

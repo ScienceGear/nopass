@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert, Users, MonitorSmartphone, Ban } from "lucide-react";
+import { RefreshCw, ShieldAlert, Users, MonitorSmartphone, Ban } from "lucide-react";
 import { EmptyState, Panel, RiskBadge } from "@/components/nova/primitives";
 import { Footer, Navbar, NovaBackground, PageShell } from "@/components/nova/shell";
 import { RequireAuth } from "@/components/nova/RequireAuth";
+import { RiskMap, type RiskPoint } from "@/components/nova/RiskMap";
+import { AdminRecoverPanel } from "@/components/nova/AdminRecover";
 import { getAdminSecurityOverview } from "@/lib/api";
 
 const stats = [
@@ -13,22 +15,54 @@ const stats = [
   { Icon: Ban, label: "Blocked", key: "blockedEvents" },
 ] as const;
 
+const POLL_INTERVAL_MS = 30_000;
+
 export const Route = createFileRoute("/admin")({ component: Admin });
 
 function Admin() {
-  const overview = useQuery({ queryKey: ["admin-security"], queryFn: getAdminSecurityOverview });
+  const overview = useQuery({
+    queryKey: ["admin-security"],
+    queryFn: getAdminSecurityOverview,
+    refetchInterval: POLL_INTERVAL_MS,
+  });
   const totals = overview.data?.totals;
+  const points: RiskPoint[] =
+    overview.data?.events
+      .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon))
+      .map((e) => ({
+        id: e.id,
+        lat: e.lat!,
+        lon: e.lon!,
+        riskScore: e.riskScore,
+        riskAction: e.riskAction,
+        user: e.user.name,
+        location: e.location,
+        at: e.at,
+      })) ?? [];
+
+  const lastUpdated = overview.dataUpdatedAt;
+  const fresh = lastUpdated ? Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000)) : 0;
+
   return (
     <RequireAuth>
       <NovaBackground>
         <PageShell>
           <Navbar variant="app" />
-          <div className="pt-8">
-            <p className="eyebrow">Bank authority</p>
-            <h1 className="pt-1 text-[1.75rem] sm:text-4xl">Security operations</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Live risk decisions from the last 30 days. Access is enforced by the API.
-            </p>
+          <div className="flex flex-wrap items-end justify-between gap-4 pt-8">
+            <div>
+              <p className="eyebrow">Bank authority</p>
+              <h1 className="pt-1 text-[1.75rem] sm:text-4xl">Security operations</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Live risk decisions from the last 30 days. Refreshes every 30s. Access is enforced
+                by the API.
+              </p>
+            </div>
+            <span className="flex items-center gap-2 rounded-full border border-hairline bg-card px-3 py-1.5 text-xs text-muted-foreground">
+              <RefreshCw
+                className={`size-3.5 ${overview.isFetching ? "animate-spin text-lime" : ""}`}
+              />
+              Updated {fresh <= 2 ? "just now" : `${fresh}s ago`}
+            </span>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {stats.map(({ Icon, label, key }) => (
@@ -43,6 +77,15 @@ function Admin() {
               </Panel>
             ))}
           </div>
+
+          <div className="mt-4 overflow-hidden rounded-3xl">
+            <RiskMap points={points} />
+          </div>
+
+          <div className="mt-4">
+            <AdminRecoverPanel />
+          </div>
+
           <Panel className="mt-4">
             <h2 className="text-lg">Suspicious activity</h2>
             <div className="mt-3 divide-y">
