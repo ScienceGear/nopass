@@ -12,7 +12,6 @@ import {
   Sparkle,
   Waves,
 } from "lucide-react";
-import { BankCard } from "@/components/nova/BankCard";
 import {
   Button,
   FeatureCard,

@@ -10,16 +10,20 @@ import {
   Mail,
   MailCheck,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   User,
 } from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
+import { PhoneInput } from "@/components/nova/PhoneInput";
 import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
 import { NovaBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  postPhoneOtpRequest,
+  postPhoneOtpVerify,
   postRegisterInitiate,
   postRegisterOptions,
   postRegisterStatus,
@@ -82,24 +86,30 @@ function Signup() {
   const [recoveryCodes, setRecoveryCodes] = React.useState<string[]>([]);
   const [resending, setResending] = React.useState(false);
   const keys = useKeystrokeCapture();
+  const [emailVerified, setEmailVerified] = React.useState(false);
+  const [phoneSent, setPhoneSent] = React.useState(false);
+  const [phoneVerified, setPhoneVerified] = React.useState(false);
+  const [phoneOtp, setPhoneOtp] = React.useState("");
+  const [phoneBusy, setPhoneBusy] = React.useState(false);
+  const [phoneError, setPhoneError] = React.useState<string | null>(null);
+  const phoneCodeSentRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (session && step !== 4) navigate({ to: "/dashboard" });
+    if (session && step !== 4) {
+      if (session.onboardingIncomplete) navigate({ to: "/onboarding" });
+      else navigate({ to: "/dashboard" });
+    }
   }, [session, navigate, step]);
 
-  // Poll verification status while on the "check your inbox" step.
+  // Poll verification status while on the "check your inbox" step. Stop as soon
+  // as the email is verified; the navigation effect below takes over.
   React.useEffect(() => {
-    if (step !== 2) return;
+    if (step !== 2 || emailVerified) return;
     let cancelled = false;
     const check = async () => {
       try {
         const status = await postRegisterStatus(email);
-        if (!cancelled && status.verified) {
-          toast.success("Email verified", {
-            description: "Continue with your secure account setup.",
-          });
-          void navigate({ to: "/onboarding" });
-        }
+        if (!cancelled && status.verified) setEmailVerified(true);
       } catch {
         /* transient — keep polling */
       }
@@ -110,7 +120,57 @@ function Signup() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [step, email, navigate]);
+  }, [step, email, emailVerified]);
+
+  // Once both the email and phone are verified, continue to onboarding. This
+  // covers the case where either verification lands last.
+  React.useEffect(() => {
+    if (step !== 2 || !emailVerified || !phoneVerified) return;
+    toast.success("Email verified", {
+      description: "Continue with your secure account setup.",
+    });
+    void navigate({ to: "/onboarding" });
+  }, [step, emailVerified, phoneVerified, navigate]);
+
+  // Auto-send the phone verification code once the signup row exists.
+  React.useEffect(() => {
+    if (step !== 2 || phoneCodeSentRef.current) return;
+    if (phoneVerified) return;
+    phoneCodeSentRef.current = true;
+    void sendPhoneCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, phoneVerified]);
+
+  async function sendPhoneCode() {
+    setPhoneError(null);
+    try {
+      await postPhoneOtpRequest({ phone, purpose: "signup", email });
+      setPhoneSent(true);
+      toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+    } catch (err) {
+      setPhoneError(err instanceof Error ? err.message : "Could not send the code.");
+    }
+  }
+
+  async function confirmPhone(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(phoneOtp)) {
+      setPhoneError("Enter the 6-digit code from your phone.");
+      return;
+    }
+    setPhoneBusy(true);
+    setPhoneError(null);
+    try {
+      await postPhoneOtpVerify({ phone, code: phoneOtp, purpose: "signup", email });
+      setPhoneVerified(true);
+      setPhoneOtp("");
+      toast.success("Phone verified", { description: "Your mobile number is confirmed." });
+    } catch (err) {
+      setPhoneError(err instanceof Error ? err.message : "That code didn't match.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  }
 
   async function startSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -242,15 +302,10 @@ function Signup() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Mobile number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="h-12 rounded-2xl"
-                      placeholder="+919876543210"
-                      autoComplete="tel"
-                    />
+                    <PhoneInput id="phone" value={phone} onChange={setPhone} autoComplete="tel" />
+                    <p className="text-xs text-muted-foreground">
+                      We&apos;ll text a verification code to this number after you continue.
+                    </p>
                   </div>
                 </div>
 
@@ -273,21 +328,22 @@ function Signup() {
                   <h1 className="text-2xl">Check your inbox</h1>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     We sent a verification link to{" "}
-                    <span className="font-medium text-ink">{email}</span>. It expires in 15 minutes.
-                    Click it, then come back here — we&apos;ll carry on automatically.
+                    <span className="font-medium text-ink">{email}</span> and a code to{" "}
+                    <span className="font-medium text-ink">{phone}</span>. It expires in 15
+                    minutes — we&apos;ll carry on automatically once both are confirmed.
                   </p>
                 </div>
 
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  Waiting for you to verify…
+                <div
+                  className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm ${
+                    emailVerified
+                      ? "bg-success/14 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {emailVerified ? <Check className="size-4" /> : <Loader2 className="size-4 animate-spin" />}
+                  {emailVerified ? "Email verified" : "Waiting for you to verify your email…"}
                 </div>
-
-                {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    {error}
-                  </p>
-                ) : null}
 
                 <Button
                   size="lg"
@@ -298,6 +354,58 @@ function Signup() {
                 >
                   {resending ? "Sending…" : "Re-send the email"}
                 </Button>
+
+                <div className="hairline-y" />
+
+                <div className="space-y-4 text-left">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lime-soft">
+                      <Smartphone className="size-[1.05rem]" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Verify your mobile number</p>
+                      <p className="text-xs text-muted-foreground">
+                        {phoneVerified
+                          ? "Your number is confirmed."
+                          : `A 6-digit code was texted to ${phone}.`}
+                      </p>
+                    </div>
+                  </div>
+                  {phoneVerified ? (
+                    <div className="flex items-center justify-center gap-2 rounded-2xl bg-success/14 px-4 py-3 text-sm text-primary">
+                      <Check className="size-4" /> Phone verified
+                    </div>
+                  ) : (
+                    <form onSubmit={confirmPhone} className="flex gap-2">
+                      <Input
+                        autoFocus
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={phoneOtp}
+                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                        placeholder="••••••"
+                        className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      />
+                      <Button type="submit" size="md" className="shrink-0" disabled={phoneBusy}>
+                        {phoneBusy ? "…" : "Verify"}
+                      </Button>
+                    </form>
+                  )}
+                  {phoneError ? (
+                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      {phoneError}
+                    </p>
+                  ) : null}
+                  {!phoneVerified ? (
+                    <button
+                      type="button"
+                      onClick={sendPhoneCode}
+                      className="w-full text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+                    >
+                      Re-send the code
+                    </button>
+                  ) : null}
+                </div>
 
                 <button
                   type="button"

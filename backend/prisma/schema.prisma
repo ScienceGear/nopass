@@ -15,6 +15,8 @@ model User {
   email         String   @unique
 name          String
   phone         String?
+  phoneVerified Boolean  @default(false)
+  phoneVerifiedAt DateTime?
   balance       Decimal  @default(500000) @db.Decimal(12, 2)
   emailVerified Boolean  @default(false) // gate: passkeys can only be registered after email verification
   onboardingStep String  @default("email_pending") // email_pending -> passkey_set -> complete
@@ -162,4 +164,17 @@ model ImageChallengeSetup {
   expiresAt DateTime
   createdAt DateTime  @default(now())
   user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/** Phone (SMS) OTP codes — hashed, one-per-purpose, 10-min TTL. */
+model PhoneOtp {
+  id        String   @id @default(uuid())
+  phone     String
+  codeHash  String // argon2 hash of the 6-digit code
+  purpose   String // "signup" | "phone_change" | "verify" | "login_step_up" | "recover"
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone, purpose])
 }

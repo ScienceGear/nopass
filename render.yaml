@@ -1,0 +1,54 @@
+# Render blueprint for the NovaBank API.
+# Apply via the Render dashboard (New + -> Blueprint -> pick this repo),
+# or `render blueprint launch` with the Render CLI.
+#
+# Secrets marked sync:false must be set in the Render dashboard after the
+# service is created (see README → Deployment).
+
+services:
+  - type: web
+    name: novabank-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run db:generate && npm run build
+    startCommand: npm start
+    # Runs before each deploy; applies committed Prisma migrations to the DB.
+    preDeployCommand: npm run db:deploy
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: WEBAUTHN_RP_ID
+        value: novabank.sciencegear.tech
+      - key: WEBAUTHN_ORIGIN
+        value: https://novabank.sciencegear.tech,https://www.novabank.sciencegear.tech
+      - key: CORS_ORIGINS
+        value: https://novabank.sciencegear.tech,https://www.novabank.sciencegear.tech
+      - key: EMAIL_HOST
+        value: smtp.resend.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USER
+        value: resend
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: NovaBank Security
+      - key: EMAIL_FROM_ADDRESS
+        value: noreply@updates.sciencegear.tech
+      - key: TEXTBEE_API_KEY
+        sync: false
+      - key: TEXTBEE_DEVICE_ID
+        value: 6a758a0e367acd8148175a91
+      - key: ADMIN_EMAILS
+        value: pranaytanpure.dev@gmail.com

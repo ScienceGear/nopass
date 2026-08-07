@@ -7,6 +7,8 @@ export interface StoredSession {
   refreshToken: string;
   name: string;
   email: string;
+  /** True when the account still needs its onboarding steps finished. */
+  onboardingIncomplete?: boolean;
 }
 
 export function saveSession(s: StoredSession) {
@@ -25,6 +27,12 @@ export function clearSession() {
   } catch {
     /* noop */
   }
+}
+
+/** Flip the onboarding-complete flag on a persisted session without touching tokens. */
+export function setOnboardingIncomplete(value: boolean) {
+  const current = getStoredSession();
+  if (current) saveSession({ ...current, onboardingIncomplete: value });
 }
 
 function read(): StoredSession | null {

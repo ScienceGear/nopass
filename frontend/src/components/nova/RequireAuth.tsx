@@ -20,12 +20,20 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const [redirected, setRedirected] = React.useState(false);
 
   React.useEffect(() => {
-    if (ready && !session && !redirected) {
+    if (!ready || redirected) return;
+    if (!session) {
       setRedirected(true);
       void router.navigate({
         to: "/login",
         search: { redirect: returnUrl },
       });
+      return;
+    }
+    // A session that exists but hasn't finished onboarding belongs on the
+    // onboarding flow, not on private banking pages.
+    if (session.onboardingIncomplete) {
+      setRedirected(true);
+      void router.navigate({ to: "/onboarding" });
     }
   }, [ready, session, redirected, router, returnUrl]);
 

@@ -101,7 +101,7 @@ export const qrApproveSchema = z.object({
 });
 
 export const stepUpVerifySchema = z.object({
-  method: z.enum(["otp_email", "passkey", "recovery_code", "image_challenge"]),
+  method: z.enum(["otp_email", "otp_sms", "passkey", "recovery_code", "image_challenge"]),
   email: z.string().email(),
   otp: z.string().length(6).optional(),
   code: z.string().min(4).optional(),
@@ -111,6 +111,36 @@ export const stepUpVerifySchema = z.object({
     .array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }))
     .max(6)
     .optional(),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
+});
+
+export const phoneOtpRequestSchema = z.object({
+  phone: z
+    .string()
+    .regex(/^\+[1-9]\d{7,14}$/, "Use an international phone number, for example +919876543210."),
+  purpose: z.enum(["signup", "phone_change", "verify", "login_step_up", "recover"]),
+  email: z.string().email().optional(),
+});
+
+export const phoneOtpVerifySchema = z.object({
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/),
+  code: z.string().length(6),
+  purpose: z.enum(["signup", "phone_change", "verify"]),
+  email: z.string().email().optional(),
+});
+
+export const phoneLoginRequestSchema = z.object({
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
+});
+
+export const phoneLoginVerifySchema = z.object({
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/),
+  otp: z.string().length(6),
   deviceFingerprint: z.string().min(8).max(256),
   deviceInfo: z.string().min(1).max(512),
   keystrokes: keystrokeSampleSchema,

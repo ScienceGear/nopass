@@ -98,8 +98,13 @@ function LoginPage() {
   }, [redirect]);
 
   React.useEffect(() => {
-    if (session) goAfterLogin();
-  }, [session, goAfterLogin]);
+    if (!session) return;
+    if (session.onboardingIncomplete) {
+      void navigate({ to: "/onboarding" });
+      return;
+    }
+    goAfterLogin();
+  }, [session, goAfterLogin, navigate]);
 
   async function handleLoginResult(res: LoginResult) {
     setResult(res);
@@ -118,7 +123,7 @@ function LoginPage() {
         Promise.resolve(getDeviceInfo()),
       ]);
       const reCredential = await startAuthentication({ optionsJSON: res.options! });
-      await postStepUpVerify({
+      const stepUp = await postStepUpVerify({
         method: "passkey",
         email,
         credential: reCredential,
@@ -128,7 +133,11 @@ function LoginPage() {
       });
       setPhase("success");
       toast.success("Signed in", { description: "Identity confirmed by your device." });
-      goAfterLogin();
+      if (stepUp.onboardingIncomplete) {
+        void navigate({ to: "/onboarding" });
+      } else {
+        goAfterLogin();
+      }
       return;
     }
 
@@ -213,6 +222,11 @@ function LoginPage() {
         setError(
           "Your email isn't verified yet. Check your inbox for the link we sent, then try again.",
         );
+      } else if (err instanceof ApiError && err.code === "NO_PASSKEY") {
+        setError(
+          "You haven't set up a passkey yet. Use the 'Email me a code' option below to finish creating your account.",
+        );
+        setShowOthers(true);
       } else {
         setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
       }
@@ -235,7 +249,7 @@ function LoginPage() {
         getDeviceFingerprint(),
         Promise.resolve(getDeviceInfo()),
       ]);
-      await postStepUpVerify({
+      const stepUp = await postStepUpVerify({
         method: "otp_email",
         email,
         otp,
@@ -245,7 +259,11 @@ function LoginPage() {
       });
       setPhase("success");
       toast.success("It's you — welcome back");
-      setTimeout(() => navigate({ to: "/dashboard" }), 900);
+      if (stepUp.onboardingIncomplete) {
+        void navigate({ to: "/onboarding" });
+      } else {
+        setTimeout(() => navigate({ to: "/dashboard" }), 900);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "That code didn't match.");
     } finally {

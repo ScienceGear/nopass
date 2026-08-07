@@ -20,6 +20,11 @@ const envSchema = z.object({
   EMAIL_FROM_NAME: z.string().default("NovaBank Security"),
   EMAIL_FROM_ADDRESS: z.string().default("security@novabank.local"),
   HIBP_API_KEY: z.string().default(""),
+  // TextBee SMS delivery for phone verification. Leave TEXTBEE_API_KEY empty in
+  // dev to log OTPs to the console instead of sending real SMS.
+  TEXTBEE_API_KEY: z.string().default(""),
+  TEXTBEE_DEVICE_ID: z.string().default(""),
+  TEXTBEE_BASE_URL: z.string().default("https://api.textbee.dev/api/v1"),
   ADMIN_EMAILS: z.string().default(""),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });

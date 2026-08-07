@@ -12,6 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Build for Vercel (Nitro outputs .vercel/output — Build Output API v3).
+  nitro: { preset: "vercel" },
   vite: {
     server: {
       // Pinned so WEBAUTHN_ORIGIN on the backend (http://localhost:5173) always matches.

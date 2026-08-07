@@ -319,6 +319,42 @@ Each sign-in accumulates a score from independent signals, then maps to an actio
 | `bun run lint` | Lint with ESLint |
 | `bun run format` | Format with Prettier |
 
+## Deployment
+
+NovaBank runs the API on [Render](https://render.com) and the web app on [Vercel](https://vercel.com). Passkeys are bound to the exact origin, so the `WEBAUTHN_*` values below must match your real domain.
+
+### 1. Backend → Render
+
+The repo ships a `render.yaml` blueprint. In the Render dashboard: **New + → Blueprint → select this repo**. It builds `backend/`, runs `npm run db:deploy` (Prisma migrations) before each deploy, and serves `node dist/index.js` on port 3001.
+
+Set these as **secret** env vars in the Render dashboard (the blueprint marks them `sync: false`):
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | your PostgreSQL URL (Aiven, Render Postgres, etc.) |
+| `REDIS_URL` | a real Redis URL (e.g. [Upstash](https://upstash.com) free tier, `rediss://...`) — `memory://` is dev-only |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | long, unique, random strings |
+| `EMAIL_PASS` | your Resend API key |
+| `TEXTBEE_API_KEY` | your TextBee API key |
+
+The blueprint already sets `WEBAUTHN_RP_ID=novabank.sciencegear.tech`, `WEBAUTHN_ORIGIN` and `CORS_ORIGINS` to both apex and `www`, and the SMTP/TextBee/Admin values. Adjust if your domain differs.
+
+Note the API binds to port 3001 locally, but Render injects `PORT` itself; the server uses `env.PORT` and respects it.
+
+### 2. Frontend → Vercel
+
+The frontend builds with the Nitro **vercel** preset (`nitro: { preset: "vercel" }` in `vite.config.ts`), producing `.vercel/output` (Build Output API v3). `frontend/vercel.json` sets the build/install commands and output directory. In Vercel:
+
+- Import the repo with **Root Directory = `frontend`**.
+- Add an **Environment Variable** `VITE_API_BASE_URL` = `https://<your-render-service>.onrender.com/api` (the full API URL including `/api`). Without it, the app falls back to `/api`, which only exists via the Vite dev proxy.
+- Attach the custom domain `novabank.sciencegear.tech` (and `www.`) to the Vercel project, and point DNS at Vercel (e.g. CNAME `cname.vercel-dns.com`).
+
+### 3. Post-deploy checks
+
+- `GET https://<render>.onrender.com/api/health` → `{"status":"ok","database":"ok","redis":"ok"}`.
+- Sign in with a passkey at `https://novabank.sciencegear.tech` — the WebAuthn ceremony only succeeds if the RP origin matches the exact domain you registered it on.
+- Phone OTP (TextBee) and email (Resend) must be configured before they can be exercised from production.
+
 ## Roadmap
 
 Realistic next steps beyond the hackathon scope:

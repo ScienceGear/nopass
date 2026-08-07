@@ -1,11 +1,18 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { ArrowRight, KeyRound, Loader2, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, Mail, ShieldCheck, Smartphone } from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
+import { PhoneInput } from "@/components/nova/PhoneInput";
 import { Footer, Logo, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { postEmailLoginRequest, postEmailLoginVerify, postRecoveryLogin } from "@/lib/api";
+import {
+  postEmailLoginRequest,
+  postEmailLoginVerify,
+  postPhoneLoginRequest,
+  postPhoneLoginVerify,
+  postRecoveryLogin,
+} from "@/lib/api";
 import { useKeystrokeCapture } from "@/lib/keystroke";
 import { toast } from "sonner";
 
@@ -24,7 +31,7 @@ export const Route = createFileRoute("/recover")({
 
 function Recover() {
   const navigate = useNavigate();
-  const [mode, setMode] = React.useState<"email" | "code">("email");
+  const [mode, setMode] = React.useState<"email" | "code" | "phone">("email");
   const [email, setEmail] = React.useState("");
   const [otp, setOtp] = React.useState("");
   const [code, setCode] = React.useState("");
@@ -33,6 +40,56 @@ function Recover() {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const keys = useKeystrokeCapture();
+  const [phone, setPhone] = React.useState("");
+  const [phoneOtp, setPhoneOtp] = React.useState("");
+  const [phoneSent, setPhoneSent] = React.useState(false);
+
+  async function requestPhone(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+      setError("Enter the mobile number on your account, with the country code.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await postPhoneLoginRequest({ phone, keystrokes: keys.getSamples() });
+      setDevOtp(res.devOtp ?? "");
+      setPhoneSent(true);
+      toast.success("Code sent", { description: `A sign-in code was texted to ${res.phoneMasked}.` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmPhone(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(phoneOtp)) {
+      setError("Enter the 6-digit code from your phone.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await postPhoneLoginVerify({
+        phone,
+        otp: phoneOtp,
+        keystrokes: keys.getSamples(),
+      });
+      toast.success("Welcome back");
+      if (session.onboardingIncomplete) {
+        navigate({ to: "/onboarding" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That code didn't match.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function requestEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -64,9 +121,13 @@ function Recover() {
     setError(null);
     try {
       const finalOtp = otp || devOtp;
-      await postEmailLoginVerify({ email, otp: finalOtp, keystrokes: keys.getSamples() });
+      const session = await postEmailLoginVerify({ email, otp: finalOtp, keystrokes: keys.getSamples() });
       toast.success("Welcome back");
-      navigate({ to: "/dashboard" });
+      if (session.onboardingIncomplete) {
+        navigate({ to: "/onboarding" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "That code didn't match.");
     } finally {
@@ -87,9 +148,13 @@ function Recover() {
     setBusy(true);
     setError(null);
     try {
-      await postRecoveryLogin({ email, code, keystrokes: keys.getSamples() });
+      const session = await postRecoveryLogin({ email, code, keystrokes: keys.getSamples() });
       toast.success("Recovered", { description: "You're signed in with a fresh session." });
-      navigate({ to: "/dashboard" });
+      if (session.onboardingIncomplete) {
+        navigate({ to: "/onboarding" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "That recovery code was invalid or already used.",
@@ -116,15 +181,16 @@ function Recover() {
                 </span>
                 <h1 className="pt-2 text-2xl">Recover your account</h1>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Lost your devices? Use the email we have, or a recovery code you saved. There is
-                  no password to reset — that&apos;s by design.
+                  Lost your devices? Use the email or phone number on file, or a recovery code you
+                  saved. There is no password to reset — that&apos;s by design.
                 </p>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-1 rounded-2xl bg-muted p-1">
+              <div className="mt-6 grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1">
                 {(
                   [
                     ["email", "Email me a code"],
+                    ["phone", "Text me a code"],
                     ["code", "Recovery code"],
                   ] as const
                 ).map(([m, label]) => (
@@ -134,8 +200,9 @@ function Recover() {
                     onClick={() => {
                       setMode(m);
                       setError(null);
+                      setPhoneSent(false);
                     }}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`rounded-xl px-2 py-2 text-sm font-medium transition-colors ${
                       mode === m ? "bg-card text-ink shadow-sm" : "text-muted-foreground"
                     }`}
                   >
@@ -205,6 +272,64 @@ function Recover() {
                     ) : null}
                     <Button type="submit" size="lg" className="w-full" disabled={busy}>
                       {busy ? "Sending…" : "Email me a code"} <Mail className="size-4" />
+                    </Button>
+                  </form>
+                )
+              ) : mode === "phone" ? (
+                phoneSent ? (
+                  <form onSubmit={confirmPhone} className="mt-6 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="recover-phone-otp">SMS code</Label>
+                      <Input
+                        id="recover-phone-otp"
+                        autoFocus
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={phoneOtp}
+                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                        onKeyDown={keys.onKeyDown}
+                        placeholder="••••••"
+                        className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      />
+                    </div>
+                    {devOtp ? (
+                      <p className="text-center text-xs text-muted-foreground">
+                        Dev preview — your code is{" "}
+                        <span className="font-mono font-semibold text-ink">{devOtp}</span>
+                      </p>
+                    ) : null}
+                    {error ? (
+                      <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                        {error}
+                      </p>
+                    ) : null}
+                    <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                      {busy ? "Checking…" : "Confirm and sign in"} <ArrowRight className="size-4" />
+                    </Button>
+                    <button
+                      type="button"
+                      className="w-full text-center text-sm font-medium text-muted-foreground hover:text-ink"
+                      onClick={() => setPhoneSent(false)}
+                    >
+                      ← Use a different number
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={requestPhone} className="mt-6 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="recover-phone">Mobile number</Label>
+                      <PhoneInput id="recover-phone" value={phone} onChange={setPhone} />
+                      <p className="text-xs text-muted-foreground">
+                        We&apos;ll text a one-time sign-in code to the number on your account.
+                      </p>
+                    </div>
+                    {error ? (
+                      <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                        {error}
+                      </p>
+                    ) : null}
+                    <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                      {busy ? "Sending…" : "Text me a code"} <Smartphone className="size-4" />
                     </Button>
                   </form>
                 )

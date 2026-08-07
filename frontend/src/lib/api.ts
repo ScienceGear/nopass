@@ -55,6 +55,7 @@ export interface UserProfile {
   email: string;
   phoneMasked: string;
   phone: string | null;
+  phoneVerified: boolean;
   avatarUrl: string | null;
   memberSince: string;
 }
@@ -120,7 +121,7 @@ export interface Session {
 
 export interface LoginResult {
   stepUpRequired: boolean;
-  method?: "otp_email" | "passkey" | "image_challenge";
+  method?: "otp_email" | "otp_sms" | "passkey" | "image_challenge";
   riskScore: number;
   riskLevel: RiskLevel;
   riskAction: RiskAction;
@@ -129,6 +130,9 @@ export interface LoginResult {
   devOtp?: string;
   options?: PublicKeyCredentialRequestOptionsJSON;
   challenge?: ImageChallenge;
+  /** Present once a session is issued. */
+  onboardingStep?: OnboardingStep;
+  onboardingIncomplete?: boolean;
 }
 
 export interface TransferResult {
@@ -283,11 +287,18 @@ export async function postVerifyEmail(token: string) {
     refreshToken: res.refreshToken,
     name: res.user.name,
     email: res.user.email,
+    onboardingIncomplete: res.onboardingStep !== "complete",
   });
   return res;
 }
 
 export type OnboardingStep = "email_pending" | "passkey_set" | "complete";
+
+/** A session plus the account's onboarding state, returned by sign-in endpoints. */
+export interface OnboardingAwareSession extends Session {
+  onboardingStep: OnboardingStep;
+  onboardingIncomplete: boolean;
+}
 
 export interface OnboardingStatus {
   email: string;
@@ -417,7 +428,7 @@ export async function postLoginVerify(input: {
 }): Promise<LoginResult> {
   const res = await apiFetch<{
     stepUpRequired: boolean;
-    method?: "otp_email" | "passkey" | "image_challenge";
+    method?: "otp_email" | "otp_sms" | "passkey" | "image_challenge";
     riskScore: number;
     riskAction: string;
     reason?: string;
@@ -426,7 +437,7 @@ export async function postLoginVerify(input: {
     challenge?: ImageChallenge;
     accessToken?: string;
     refreshToken?: string;
-    user?: { name: string; email: string };
+    user?: { name: string; email: string; onboardingStep?: OnboardingStep; onboardingIncomplete?: boolean };
   }>("/auth/login/verify", {
     method: "POST",
     body: JSON.stringify(input),
@@ -436,7 +447,7 @@ export async function postLoginVerify(input: {
 
 function toLoginResult(res: {
   stepUpRequired: boolean;
-  method?: "otp_email" | "passkey" | "image_challenge";
+  method?: "otp_email" | "otp_sms" | "passkey" | "image_challenge";
   riskScore: number;
   riskAction: string;
   reason?: string;
@@ -445,12 +456,15 @@ function toLoginResult(res: {
   challenge?: ImageChallenge;
   accessToken?: string;
   refreshToken?: string;
-  user?: { name: string; email: string };
+  user?: { name: string; email: string; onboardingStep?: OnboardingStep; onboardingIncomplete?: boolean };
 }): LoginResult {
   const riskLevel: RiskLevel = res.riskScore > 60 ? "high" : res.riskScore > 30 ? "medium" : "low";
   const riskAction: RiskAction =
     res.riskAction === "block" ? "block" : res.riskAction === "allow" ? "allow" : "step_up";
   const reason = res.reason ?? defaultReason(res.riskScore, res.riskAction);
+  const onboardingStep = res.user?.onboardingStep;
+  const onboardingIncomplete = res.user?.onboardingIncomplete ?? false;
+  const onboarding = onboardingStep ? { onboardingStep, onboardingIncomplete } : { onboardingIncomplete };
 
   if (res.stepUpRequired) {
     return {
@@ -460,6 +474,7 @@ function toLoginResult(res: {
       riskLevel,
       riskAction,
       reason,
+      ...onboarding,
       ...(res.devOtp ? { devOtp: res.devOtp } : {}),
       ...(res.options ? { options: res.options } : {}),
       ...(res.challenge ? { challenge: res.challenge } : {}),
@@ -467,18 +482,21 @@ function toLoginResult(res: {
   }
 
   if (res.accessToken && res.refreshToken && res.user) {
-    saveSession({
+    const session = {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
       name: res.user.name,
       email: res.user.email,
-    });
+      onboardingIncomplete,
+    };
+    saveSession(session);
     return {
       stepUpRequired: false,
       riskScore: res.riskScore,
       riskLevel,
       riskAction,
       reason,
+      ...onboarding,
       session: {
         accessToken: res.accessToken,
         refreshToken: res.refreshToken,
@@ -488,7 +506,14 @@ function toLoginResult(res: {
     };
   }
 
-  return { stepUpRequired: false, riskScore: res.riskScore, riskLevel, riskAction, reason };
+  return {
+    stepUpRequired: false,
+    riskScore: res.riskScore,
+    riskLevel,
+    riskAction,
+    reason,
+    ...onboarding,
+  };
 }
 
 function defaultReason(score: number, action: string): string {
@@ -523,7 +548,7 @@ export async function postEmailLoginVerify(input: {
   email: string;
   otp: string;
   keystrokes: { prev: number; curr: number; delta: number }[];
-}): Promise<Session> {
+}): Promise<OnboardingAwareSession> {
   const [deviceFingerprint, deviceInfo] = await Promise.all([
     getDeviceFingerprint(),
     Promise.resolve(getDeviceInfo()),
@@ -532,18 +557,24 @@ export async function postEmailLoginVerify(input: {
     verified: boolean;
     accessToken: string;
     refreshToken: string;
-    user: { name: string; email: string };
+    user: { name: string; email: string; onboardingStep: OnboardingStep; onboardingIncomplete: boolean };
   }>("/auth/login/email-otp/verify", {
     method: "POST",
     body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
   });
+  const onboardingIncomplete = res.user.onboardingIncomplete ?? false;
   const session = {
     accessToken: res.accessToken,
     refreshToken: res.refreshToken,
     name: res.user.name,
     email: res.user.email,
+    onboardingStep: res.user.onboardingStep,
+    onboardingIncomplete,
   };
-  saveSession(session);
+  saveSession({
+    ...session,
+    onboardingIncomplete,
+  });
   return session;
 }
 
@@ -551,7 +582,7 @@ export async function postRecoveryLogin(input: {
   email: string;
   code: string;
   keystrokes: { prev: number; curr: number; delta: number }[];
-}): Promise<Session> {
+}): Promise<OnboardingAwareSession> {
   const [deviceFingerprint, deviceInfo] = await Promise.all([
     getDeviceFingerprint(),
     Promise.resolve(getDeviceInfo()),
@@ -560,18 +591,24 @@ export async function postRecoveryLogin(input: {
     verified: boolean;
     accessToken: string;
     refreshToken: string;
-    user: { name: string; email: string };
+    user: { name: string; email: string; onboardingStep: OnboardingStep; onboardingIncomplete: boolean };
   }>("/auth/login/recovery-code", {
     method: "POST",
     body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
   });
+  const onboardingIncomplete = res.user.onboardingIncomplete ?? false;
   const session = {
     accessToken: res.accessToken,
     refreshToken: res.refreshToken,
     name: res.user.name,
     email: res.user.email,
+    onboardingStep: res.user.onboardingStep,
+    onboardingIncomplete,
   };
-  saveSession(session);
+  saveSession({
+    ...session,
+    onboardingIncomplete,
+  });
   return session;
 }
 
@@ -592,18 +629,112 @@ export async function postStepUpVerify(input: {
     verified: boolean;
     accessToken: string;
     refreshToken: string;
-    user: { name: string; email: string };
+    user: { name: string; email: string; onboardingStep?: OnboardingStep; onboardingIncomplete?: boolean };
   }>("/auth/step-up/verify", {
     method: "POST",
     body: JSON.stringify(input),
   });
+  const onboardingIncomplete = res.user?.onboardingIncomplete ?? false;
   saveSession({
     accessToken: res.accessToken,
     refreshToken: res.refreshToken,
     name: res.user.name,
     email: res.user.email,
+    onboardingIncomplete,
   });
-  return { verified: res.verified, session: res };
+  return {
+    verified: res.verified,
+    session: res,
+    onboardingIncomplete,
+  };
+}
+
+/* ── Phone (SMS) OTP verification ───────────────────────────────────────── */
+
+export type PhoneOtpPurpose =
+  | "signup"
+  | "phone_change"
+  | "verify"
+  | "login_step_up"
+  | "recover";
+
+export interface PhoneOtpRequestResult {
+  ok: boolean;
+  phoneMasked: string;
+  devOtp?: string;
+  remaining?: number;
+  /** Seconds until the 6-SMS/day quota resets. */
+  retryAfter?: number;
+}
+
+export async function postPhoneOtpRequest(input: {
+  phone: string;
+  purpose: PhoneOtpPurpose;
+  email?: string;
+}): Promise<PhoneOtpRequestResult> {
+  return apiFetch<PhoneOtpRequestResult>("/auth/phone-otp/request", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postPhoneOtpVerify(input: {
+  phone: string;
+  code: string;
+  purpose: PhoneOtpPurpose;
+  email?: string;
+}): Promise<{ ok: boolean; phoneVerified: boolean }> {
+  return apiFetch<{ ok: boolean; phoneVerified: boolean }>("/auth/phone-otp/verify", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Send an SMS sign-in code to the phone number on file. */
+export async function postPhoneLoginRequest(input: {
+  phone: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}): Promise<PhoneOtpRequestResult> {
+  const [deviceFingerprint, deviceInfo] = await Promise.all([
+    getDeviceFingerprint(),
+    Promise.resolve(getDeviceInfo()),
+  ]);
+  return apiFetch<PhoneOtpRequestResult>("/auth/login/phone-otp", {
+    method: "POST",
+    body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
+  });
+}
+
+/** Exchange an SMS code for a signed-in session. */
+export async function postPhoneLoginVerify(input: {
+  phone: string;
+  otp: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}): Promise<OnboardingAwareSession> {
+  const [deviceFingerprint, deviceInfo] = await Promise.all([
+    getDeviceFingerprint(),
+    Promise.resolve(getDeviceInfo()),
+  ]);
+  const res = await apiFetch<{
+    verified: boolean;
+    accessToken: string;
+    refreshToken: string;
+    user: { name: string; email: string; onboardingStep: OnboardingStep; onboardingIncomplete: boolean };
+  }>("/auth/login/phone-otp/verify", {
+    method: "POST",
+    body: JSON.stringify({ ...input, deviceFingerprint, deviceInfo }),
+  });
+  const onboardingIncomplete = res.user.onboardingIncomplete ?? false;
+  const session = {
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+    onboardingStep: res.user.onboardingStep,
+    onboardingIncomplete,
+  };
+  saveSession({ ...session, onboardingIncomplete });
+  return session;
 }
 
 /* ── Image-sequence step-up (Phase 8) ──────────────────────────────────── */
@@ -684,7 +815,7 @@ export async function postQrExchange(input: {
   const res = await apiFetch<{
     accessToken: string;
     refreshToken: string;
-    user: { name: string; email: string };
+    user: { name: string; email: string; onboardingStep?: OnboardingStep; onboardingIncomplete?: boolean };
   }>("/auth/login/qr/exchange", {
     method: "POST",
     body: JSON.stringify(input),
@@ -694,6 +825,7 @@ export async function postQrExchange(input: {
     refreshToken: res.refreshToken,
     name: res.user.name,
     email: res.user.email,
+    onboardingIncomplete: res.user?.onboardingIncomplete ?? false,
   });
   return res;
 }
@@ -1016,6 +1148,7 @@ export async function getProfile(): Promise<UserProfile> {
       balance: string;
       createdAt: string;
       phone: string | null;
+      phoneVerified: boolean;
     };
   }>("/user/profile", { headers: authHeaders() });
 
@@ -1027,18 +1160,21 @@ export async function getProfile(): Promise<UserProfile> {
       ? `${res.user.phone.slice(0, 3)} ••••• ${res.user.phone.slice(-4)}`
       : "Not provided",
     phone: res.user.phone,
+    phoneVerified: res.user.phoneVerified,
     avatarUrl: null,
     memberSince: res.user.createdAt,
   };
 }
 
-export async function patchProfile(input: Partial<UserProfile>): Promise<UserProfile> {
+export async function patchProfile(
+  input: Partial<UserProfile> & { phoneOtp?: string },
+): Promise<UserProfile> {
   const res = await apiFetch<{
     user: { id: string; email: string; name: string; phone: string | null };
   }>("/user/profile", {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ name: input.name, phone: input.phone }),
+    body: JSON.stringify({ name: input.name, phone: input.phone, phoneOtp: input.phoneOtp }),
   });
   const current = getStoredSession();
   if (current?.email === res.user.email) {

@@ -4,6 +4,7 @@ node_modules
 # Build output
 dist
 .output
+.vercel
 .wrangler
 
 # Environment (never commit secrets)

@@ -23,7 +23,7 @@ import {
   type OnboardingStatus,
 } from "@/lib/api";
 import { downloadRecoveryCodesPdf } from "@/lib/recoveryPdf";
-import { useSession } from "@/lib/session";
+import { setOnboardingIncomplete, useSession } from "@/lib/session";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/onboarding")({ component: Onboarding });
@@ -75,6 +75,12 @@ function Onboarding() {
     }
     void loadStatus();
   }, [ready, session, navigate, loadStatus]);
+
+  // Once onboarding is complete, drop the incomplete flag so RequireAuth and
+  // the login redirects treat this account as fully set up.
+  React.useEffect(() => {
+    if (status?.onboardingStep === "complete") setOnboardingIncomplete(false);
+  }, [status?.onboardingStep]);
 
   React.useEffect(() => {
     if (status?.onboardingStep !== "passkey_set") return;

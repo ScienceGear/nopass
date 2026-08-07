@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { KeyRound, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, KeyRound, Loader2, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { Button, EmptyState, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
+import { PhoneInput } from "@/components/nova/PhoneInput";
 import { ListSkeleton } from "@/components/nova/skeletons";
 import { Footer, Navbar, NovaBackground, PageShell, Reveal } from "@/components/nova/shell";
 import { RequireAuth } from "@/components/nova/RequireAuth";
@@ -18,6 +19,7 @@ import {
   getProfile,
   getRecoveryCodes,
   postPasskey,
+  postPhoneOtpRequest,
   postRegenerateRecoveryCodes,
   patchProfile,
   revokeDevice,
@@ -53,6 +55,12 @@ function SecuritySettings() {
   const [name, setName] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [profileBusy, setProfileBusy] = React.useState(false);
+  const [phoneOtpSent, setPhoneOtpSent] = React.useState(false);
+  const [phoneOtp, setPhoneOtp] = React.useState("");
+  const [phoneBusy, setPhoneBusy] = React.useState(false);
+  const [phoneMsg, setPhoneMsg] = React.useState<string | null>(null);
+
+  const phoneChanged = Boolean(phone && profile.data && phone !== profile.data.phone);
 
   React.useEffect(() => {
     if (passkeys.data) setList(passkeys.data);
@@ -69,6 +77,22 @@ function SecuritySettings() {
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+  async function sendPhoneCode() {
+    if (!phone) return;
+    setPhoneBusy(true);
+    setPhoneMsg(null);
+    try {
+      await postPhoneOtpRequest({ phone, purpose: "phone_change" });
+      setPhoneOtpSent(true);
+      setPhoneOtp("");
+      toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+    } catch (error) {
+      setPhoneMsg(error instanceof Error ? error.message : "Could not send the code.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  }
 
   return (
     <RequireAuth>
@@ -92,9 +116,19 @@ function SecuritySettings() {
                   className="mt-4 space-y-3"
                   onSubmit={async (event) => {
                     event.preventDefault();
+                    if (phoneChanged && !/^\d{6}$/.test(phoneOtp)) {
+                      toast.error("Enter the 6-digit code we texted you before saving the new number.");
+                      return;
+                    }
                     setProfileBusy(true);
                     try {
-                      await patchProfile({ name, phone });
+                      await patchProfile({
+                        name,
+                        phone,
+                        ...(phoneChanged ? { phoneOtp } : {}),
+                      });
+                      setPhoneOtp("");
+                      setPhoneOtpSent(false);
                       await profile.refetch();
                       toast.success("Profile updated");
                     } catch (error) {
@@ -117,20 +151,82 @@ function SecuritySettings() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="profile-phone">Mobile number</Label>
-                    <Input
+                    <PhoneInput
                       id="profile-phone"
-                      type="tel"
                       value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
-                      placeholder="+919876543210"
-                      className="h-11 rounded-2xl"
+                      onChange={(value) => {
+                        setPhone(value);
+                        if (value !== profile.data?.phone) {
+                          setPhoneOtpSent(false);
+                          setPhoneOtp("");
+                        }
+                      }}
+                      className="rounded-2xl"
                     />
+                    {phoneChanged ? (
+                      <div className="space-y-2">
+                        {phoneOtpSent ? (
+                          <div className="flex gap-2">
+                            <Input
+                              autoFocus
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={phoneOtp}
+                              onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                              placeholder="••••••"
+                              className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
+                            />
+                            <button
+                              type="button"
+                              onClick={sendPhoneCode}
+                              disabled={phoneBusy}
+                              className="shrink-0 rounded-2xl border border-input px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-ink"
+                            >
+                              Resend
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            disabled={phoneBusy}
+                            onClick={sendPhoneCode}
+                          >
+                            {phoneBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                            Text me a verification code
+                          </Button>
+                        )}
+                        {phoneMsg ? (
+                          <p className="text-xs text-destructive">{phoneMsg}</p>
+                        ) : phoneOtpSent ? (
+                          <p className="text-xs text-muted-foreground">
+                            Enter the 6-digit code we just texted to the new number.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            We&apos;ll text a one-time code to the new number to confirm you own it.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                    {profile.data?.phoneVerified && !phoneChanged ? (
+                      <p className="flex items-center gap-1.5 text-xs text-success">
+                        <Check className="size-3.5" /> Number verified
+                      </p>
+                    ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Email changes require a separate verification flow and are not changed from an
                     active session.
                   </p>
-                  <Button type="submit" size="sm" className="w-full" disabled={profileBusy}>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="w-full"
+                    disabled={profileBusy || (phoneChanged && !/^\d{6}$/.test(phoneOtp))}
+                  >
                     {profileBusy ? "Saving…" : "Save profile"}
                   </Button>
                 </form>

@@ -31,6 +31,12 @@ import { evaluateRisk } from "../services/riskEngine.js";
 import { assessContext, type RiskContextInput } from "../services/riskContextService.js";
 import { mergeSample, emptyProfile, type KeystrokeProfile } from "../services/keystrokeService.js";
 import { sendOtp, verifyOtp, sendAlertEmail, sendVerificationEmail } from "../services/emailService.js";
+import {
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  smsRemaining,
+  type PhoneOtpPurpose,
+} from "../services/smsService.js";
 import { checkEmailBreach } from "../services/hibpService.js";
 import { markDeviceTrusted } from "../services/deviceService.js";
 import { geoFromIp, formatLocation } from "../utils/geo.js";
@@ -59,6 +65,10 @@ import {
   emailLoginRequestSchema,
   emailLoginVerifySchema,
   recoveryLoginSchema,
+  phoneOtpRequestSchema,
+  phoneOtpVerifySchema,
+  phoneLoginRequestSchema,
+  phoneLoginVerifySchema,
 } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
 
@@ -90,7 +100,7 @@ async function requireOnboardingStep(userId: string | undefined, expected: Onboa
 }
 
 async function completeLogin(
-  user: { id: string; email: string; name: string },
+  user: { id: string; email: string; name: string; onboardingStep: string; phoneVerified?: boolean },
   ctx: LoginContext,
   riskScore: number,
   riskAction: string,
@@ -156,7 +166,18 @@ async function completeLogin(
     },
   });
 
-  return { accessToken, refreshToken, user: { id: user.id, email: user.email, name: user.name } };
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      onboardingStep: user.onboardingStep,
+      onboardingIncomplete: user.onboardingStep !== "complete",
+      phoneVerified: user.phoneVerified ?? false,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +190,12 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
-    if (existing.emailVerified) throw new AppError(409, "An account already exists with this email — log in instead.");
+    if (existing.emailVerified) {
+      throw new AppError(409, "This email is already verified — sign in to finish setting up your account.", {
+        code: "ONBOARDING_INCOMPLETE",
+        currentStep: existing.onboardingStep,
+      });
+    }
     logger.info(`Resending verification email for pending signup ${normalizedEmail}`);
   } else {
     await prisma.user.create({
@@ -263,6 +289,8 @@ export const onboardingStatus: RequestHandler = asyncHandler(async (req, res) =>
   res.json({
     email: user.email,
     name: user.name,
+    phone: user.phone,
+    phoneVerified: user.phoneVerified,
     emailVerified: user.emailVerified,
     onboardingStep: user.onboardingStep,
   });
@@ -463,15 +491,14 @@ export const loginOptions: RequestHandler = asyncHandler(async (req, res) => {
   });
   if (!user) throw new AppError(404, "No account found with this email. Sign up first.");
   if (!user.emailVerified) throw new AppError(403, "Verify your email before signing in — we emailed you a link.", { code: "EMAIL_UNVERIFIED" });
-  if (user.onboardingStep !== "complete") {
-    throw new AppError(409, "Finish setting up your account before signing in.", {
-      code: "ONBOARDING_INCOMPLETE",
+
+  const credentials = buildUserCredentialsFromDb(user.credentials);
+  if (credentials.length === 0) {
+    throw new AppError(403, "No passkeys registered for this account yet. Use the email code option below to finish setting up.", {
+      code: "NO_PASSKEY",
       currentStep: user.onboardingStep,
     });
   }
-
-  const credentials = buildUserCredentialsFromDb(user.credentials);
-  if (credentials.length === 0) throw new AppError(403, "No passkeys registered for this account.");
 
   const options = await buildAuthenticationOptions({
     id: user.id,
@@ -488,12 +515,6 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email }, include: { credentials: true } });
   if (!user) throw new AppError(401, "Invalid credentials.");
-  if (user.onboardingStep !== "complete") {
-    throw new AppError(409, "Finish setting up your account before signing in.", {
-      code: "ONBOARDING_INCOMPLETE",
-      currentStep: user.onboardingStep,
-    });
-  }
 
   const credentialRecord = user.credentials.find((c) => c.credentialId === body.credential.id);
   if (!credentialRecord) throw new AppError(404, "Passkey not found for this account.");
@@ -548,6 +569,18 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
       const options = await buildAuthenticationOptions({ id: user.id, email: user.email, credentials: userCreds });
       return res.json({ stepUpRequired: true, method: "passkey", risk: assessment, options });
     }
+    if (user.phoneVerified && user.phone) {
+      const phoneCode = await sendPhoneOtp(user.phone, "login_step_up", `user:${user.id}`);
+      if (phoneCode) {
+        return res.json({
+          stepUpRequired: true,
+          method: "otp_sms",
+          risk: assessment,
+          phoneMasked: `${user.phone.slice(0, 3)}•••••${user.phone.slice(-2)}`,
+          ...(isProduction ? {} : { devOtp: phoneCode }),
+        });
+      }
+    }
     const otp = await sendOtp(email, "login_step_up");
     return res.json({
       stepUpRequired: true,
@@ -577,12 +610,6 @@ export const requestEmailLogin: RequestHandler = asyncHandler(async (req, res) =
   const email = body.email.trim().toLowerCase();
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new AppError(404, "No account found with this email. Sign up first.");
-  if (user.onboardingStep !== "complete") {
-    throw new AppError(409, "Finish setting up your account before signing in.", {
-      code: "ONBOARDING_INCOMPLETE",
-      currentStep: user.onboardingStep,
-    });
-  }
 
   // Record the context risk without blocking the send, so the audit trail is
   // complete even if the code is never used.
@@ -703,6 +730,140 @@ export const recoverLogin: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PHONE (SMS) OTP — verification, number change, signup, step-up
+// ---------------------------------------------------------------------------
+
+function maskPhone(phone: string): string {
+  if (phone.length <= 4) return phone;
+  return `${phone.slice(0, 3)}•••••${phone.slice(-2)}`;
+}
+
+/**
+ * Send a phone OTP. Purpose determines who is allowed and what the quota key
+ * is: per-user for signed-in flows, per-phone for anonymous ones.
+ */
+export const requestPhoneOtp: RequestHandler = asyncHandler(async (req, res) => {
+  const { phone, purpose, email } = phoneOtpRequestSchema.parse(req.body);
+
+  let quotaKey = phone;
+  let targetPhone = phone;
+
+  if (purpose === "phone_change" || purpose === "login_step_up" || purpose === "verify") {
+    if (!req.userId) throw new AppError(401, "Sign in to verify a phone number.");
+    quotaKey = `user:${req.userId}`;
+    if (purpose === "login_step_up" || purpose === "verify") {
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user) throw new AppError(404, "User not found.");
+      if (!user.phone) throw new AppError(400, "No phone number on file to verify.");
+      targetPhone = user.phone;
+    }
+  } else if (purpose === "recover") {
+    const user = await prisma.user.findFirst({ where: { phone } });
+    if (!user) throw new AppError(404, "No account found with this phone number.");
+  } else if (purpose === "signup" && email) {
+    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    quotaKey = user ? `user:${user.id}` : phone;
+  }
+
+  const code = await sendPhoneOtp(targetPhone, purpose, quotaKey);
+  if (code === null) {
+    throw new AppError(429, "Daily SMS limit reached. Try again tomorrow.", {
+      code: "SMS_LIMIT",
+      remaining: 0,
+    });
+  }
+
+  res.json({
+    ok: true,
+    phoneMasked: maskPhone(targetPhone),
+    remaining: await smsRemaining(quotaKey),
+    ...(isProduction ? {} : { devOtp: code }),
+  });
+});
+
+export const verifyPhoneOtpRoute: RequestHandler = asyncHandler(async (req, res) => {
+  const { phone, code, purpose, email } = phoneOtpVerifySchema.parse(req.body);
+  const valid = await verifyPhoneOtp(phone, code, purpose);
+  if (!valid) throw new AppError(401, "That code was incorrect or expired.");
+
+  if (purpose === "signup") {
+    const user = email
+      ? await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } })
+      : await prisma.user.findFirst({ where: { phone } });
+    if (!user) throw new AppError(404, "Account not found. Start signup again.");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { phone, phoneVerified: true, phoneVerifiedAt: new Date() },
+    });
+  } else {
+    if (!req.userId) throw new AppError(401, "Sign in to verify a phone number.");
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: { phone, phoneVerified: true, phoneVerifiedAt: new Date() },
+    });
+  }
+
+  res.json({ ok: true, phoneVerified: true });
+});
+
+/** Send an SMS sign-in code to the phone number on file. */
+export const requestPhoneLogin: RequestHandler = asyncHandler(async (req, res) => {
+  const { phone, deviceFingerprint, deviceInfo, keystrokes } = phoneLoginRequestSchema.parse(req.body);
+  const user = await prisma.user.findFirst({ where: { phone } });
+  if (!user) throw new AppError(404, "No account found with this phone number.");
+
+  const ctx: LoginContext = { email: user.email, deviceFingerprint, deviceInfo, keystrokes };
+  const input = await assessContext(user, ctx, req.ip ?? "unknown");
+  const assessment = evaluateRisk(input);
+  if (assessment.action === "block") {
+    await sendAlertEmail(
+      user.email,
+      "NovaBank blocked a sign-in attempt",
+      `We blocked an SMS sign-in request from ${deviceInfo} (${req.ip}). If this was you, contact support.`,
+    );
+    await prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        eventType: "login",
+        deviceInfo,
+        ipAddress: req.ip ?? "unknown",
+        location: input.location,
+        riskScore: assessment.score,
+        riskAction: "block",
+        details: JSON.stringify({ signals: assessment.signals, method: "phone_otp" }),
+      },
+    });
+    throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
+  }
+
+  const code = await sendPhoneOtp(phone, "recover", phone);
+  if (code === null) {
+    throw new AppError(429, "Daily SMS limit reached. Try again tomorrow.", { code: "SMS_LIMIT" });
+  }
+  res.json({ ok: true, phoneMasked: maskPhone(phone), ...(isProduction ? {} : { devOtp: code }) });
+});
+
+/** Exchange the SMS code for a signed-in session. */
+export const verifyPhoneLogin: RequestHandler = asyncHandler(async (req, res) => {
+  const { phone, otp, deviceFingerprint, deviceInfo, keystrokes } = phoneLoginVerifySchema.parse(req.body);
+  const ok = await verifyPhoneOtp(phone, otp, "recover");
+  if (!ok) throw new AppError(401, "That code was incorrect or expired.");
+
+  const user = await prisma.user.findFirst({ where: { phone } });
+  if (!user) throw new AppError(404, "Account not found.");
+
+  const ctx: LoginContext = { email: user.email, deviceFingerprint, deviceInfo, keystrokes };
+  const { accessToken, refreshToken, user: outUser } = await completeLogin(
+    user,
+    ctx,
+    0,
+    "allow",
+    req.ip ?? "unknown",
+  );
+  res.json({ verified: true, accessToken, refreshToken, user: outUser });
+});
+
+// ---------------------------------------------------------------------------
 // IMAGE-SEQUENCE STEP-UP (Phase 8)
 // ---------------------------------------------------------------------------
 
@@ -747,6 +908,9 @@ export const stepUpVerify: RequestHandler = asyncHandler(async (req, res) => {
   let ok = false;
   if (body.method === "otp_email") {
     ok = await verifyOtp(email, body.otp ?? "", "login_step_up");
+  } else if (body.method === "otp_sms") {
+    if (!user.phone) throw new AppError(400, "No phone number on file to verify.");
+    ok = await verifyPhoneOtp(user.phone, body.otp ?? "", "login_step_up");
   } else if (body.method === "recovery_code") {
     const code = (body.code ?? "").trim();
     const rows = await prisma.recoveryCode.findMany({ where: { userId: user.id, used: false } });
@@ -815,7 +979,7 @@ export const qrStatus: RequestHandler = asyncHandler(async (req, res) => {
 export const qrApproveOptions: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "You must be signed in to approve a login.");
   const user = await prisma.user.findUnique({ where: { id: req.userId }, include: { credentials: true } });
-  if (!user || user.onboardingStep !== "complete") throw new AppError(403, "Complete account setup before approving a sign-in.");
+  if (!user) throw new AppError(404, "User not found.");
 
   const credentials = buildUserCredentialsFromDb(user.credentials);
   if (credentials.length === 0) throw new AppError(403, "No passkeys are available to approve this sign-in.");
@@ -936,6 +1100,8 @@ export const me: RequestHandler = asyncHandler(async (req, res) => {
       name: user.name,
       createdAt: user.createdAt,
       emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      onboardingStep: user.onboardingStep,
     },
   });
 });

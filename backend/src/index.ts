@@ -16,19 +16,22 @@ import adminRoutes from "./routes/admin.js";
 const app = express();
 app.disable("x-powered-by");
 
+// Render (and other platforms) terminate TLS at a proxy; without this, req.ip is
+// the proxy IP and every rate limiter shares one bucket. Express uses the first
+// entry of X-Forwarded-For, which the proxy sets to the real client IP.
+app.set("trust proxy", 1);
+
 /**
  * CORS allowlist. Requests with no Origin header (curl, same-origin, server
  * tools) always pass. Browser requests must come from an allowed origin:
- * - the configured WEBAUTHN_ORIGIN
+ * - the configured WEBAUTHN_ORIGIN(s) (comma-separated)
  * - anything in CORS_ORIGINS (comma-separated extra origins, e.g. a custom domain)
  * - in development only, any localhost port
  * In production, unknown origins are rejected.
  */
 const corsAllowlist = new Set<string>([
-  env.WEBAUTHN_ORIGIN,
-  ...env.CORS_ORIGINS.split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
+  ...env.WEBAUTHN_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean),
+  ...env.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
 ]);
 
 app.use(
