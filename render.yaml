@@ -11,7 +11,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: npm install && npm run db:generate && npm run build
+    buildCommand: npm install --include=dev && npm run db:generate && npm run build
     startCommand: npm start
     # Runs before each deploy; applies committed Prisma migrations to the DB.
     preDeployCommand: npm run db:deploy

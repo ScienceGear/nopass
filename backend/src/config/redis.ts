@@ -11,7 +11,6 @@ export function getRedis(): Redis {
         ? (new RedisMock() as unknown as Redis)
         : new Redis(env.REDIS_URL, {
             maxRetriesPerRequest: 1,
-            enableOfflineQueue: false,
             lazyConnect: false,
           });
     client.on("error", (err) => {
