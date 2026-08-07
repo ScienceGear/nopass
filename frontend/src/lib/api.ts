@@ -172,6 +172,28 @@ async function rawFetch(path: string, init: RequestInit = {}) {
   return fetch(`${BASE_URL}${path}`, { ...init, headers });
 }
 
+/**
+ * Single-flight token refresh. The backend rotates the refresh token on every
+ * call, so when several requests hit a 401 at once (e.g. the dashboard's four
+ * parallel queries after the access token expires) they must share ONE refresh.
+ * Otherwise the concurrent calls race the rotation and wipe the session.
+ */
+let refreshInFlight: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
+
+async function refreshSession(): Promise<{ accessToken: string; refreshToken: string } | null> {
+  const session = getStoredSession();
+  if (!session?.refreshToken) return null;
+  const res = await fetch(`${BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken: session.refreshToken }),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
+  if (!data.accessToken) return null;
+  return { accessToken: data.accessToken, refreshToken: data.refreshToken ?? session.refreshToken };
+}
+
 async function apiFetch<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   let res = await rawFetch(path, init);
 
@@ -179,16 +201,15 @@ async function apiFetch<T>(path: string, init: RequestInit = {}, retry = true): 
     const session = getStoredSession();
     if (session?.refreshToken) {
       try {
-        const data = (await fetch(`${BASE_URL}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken: session.refreshToken }),
-        }).then((r) => r.json())) as { accessToken?: string; refreshToken?: string };
-        if (data.accessToken) {
+        refreshInFlight ??= refreshSession().finally(() => {
+          refreshInFlight = null;
+        });
+        const tokens = await refreshInFlight;
+        if (tokens) {
           saveSession({
             ...session,
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken ?? session.refreshToken,
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
           });
           res = await rawFetch(path, init);
         }
