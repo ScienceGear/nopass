@@ -260,7 +260,7 @@ export const listDevices: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "Not authenticated.");
   const [devices, currentSession] = await Promise.all([
     prisma.trustedDevice.findMany({
-      where: { userId: req.userId },
+      where: { userId: req.userId, isRevoked: false },
       orderBy: { lastSeen: "desc" },
     }),
     req.sessionId
@@ -296,7 +296,36 @@ export const revokeDevice: RequestHandler = asyncHandler(async (req, res) => {
   const device = await prisma.trustedDevice.findFirst({ where: { id, userId: req.userId } });
   if (!device) throw new AppError(404, "Device not found.");
 
-  await prisma.trustedDevice.delete({ where: { id } });
+  await prisma.trustedDevice.update({
+    where: { id },
+    data: { isRevoked: true },
+  });
+  res.json({ ok: true });
+});
+
+export const massRevokeDevices: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const { passkeyVerified } = req.body as { passkeyVerified?: boolean };
+
+  if (!passkeyVerified) {
+    throw new AppError(403, "Passkey verification required.");
+  }
+
+  const currentSession = req.sessionId
+    ? await prisma.session.findUnique({ where: { id: req.sessionId } })
+    : null;
+
+  await prisma.trustedDevice.updateMany({
+    where: {
+      userId: req.userId,
+      isRevoked: false,
+      NOT: currentSession
+        ? { deviceInfo: currentSession.deviceInfo, ipAddress: currentSession.ipAddress }
+        : undefined,
+    },
+    data: { isRevoked: true },
+  });
+
   res.json({ ok: true });
 });
 
