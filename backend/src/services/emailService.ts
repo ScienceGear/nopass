@@ -156,6 +156,10 @@ function renderVerifyEmail(args: { name: string; link: string }): { subject: str
 
 /* ── Delivery ─────────────────────────────────────────────────────────── */
 
+function logDevEmail(email: string, mail: { subject: string; text: string }) {
+  logger.info(`[email:dev] ${mail.subject} → ${email}\n${mail.text}`);
+}
+
 /**
  * Send via the Resend HTTP API (HTTPS/443).
  * Required on Render, which blocks outbound SMTP on port 587/465.
@@ -186,7 +190,6 @@ async function deliverViaResend(
 }
 
 async function deliver(email: string, mail: { subject: string; html: string; text: string }) {
-  // Missing credentials — the #1 silent cause of "email never arrives".
   const hasResend = Boolean(env.RESEND_API_KEY);
   const hasSmtp = Boolean(env.EMAIL_USER && env.EMAIL_PASS);
 
@@ -202,7 +205,7 @@ async function deliver(email: string, mail: { subject: string; html: string; tex
         "Email service is not configured. Set RESEND_API_KEY (or EMAIL_USER/EMAIL_PASS) in the deployment environment.",
       );
     }
-    logger.info(`[email:dev] ${mail.subject} → ${email}\n${mail.text}`);
+    logDevEmail(email, mail);
     return;
   }
 
@@ -220,11 +223,12 @@ async function deliver(email: string, mail: { subject: string; html: string; tex
     }
     logger.info(`[email] sent "${mail.subject}" → ${email}`);
   } catch (err) {
-    logger.error(
-      "Email send failed",
-      err instanceof Error ? (err.stack ?? err.message) : String(err),
-    );
-    throw new Error(`Email delivery failed: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn("Email send failed", err instanceof Error ? err.message : String(err));
+    if (isProduction) {
+      throw new Error(`Email delivery failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    logger.warn("SMTP delivery failed — falling back to terminal output for this message.");
+    logDevEmail(email, mail);
   }
 }
 
@@ -279,4 +283,5 @@ export async function sendAlertEmail(email: string, subject: string, body: strin
 export async function sendVerificationEmail(email: string, name: string, link: string) {
   const mail = renderVerifyEmail({ name, link });
   await deliver(email, mail);
+  if (!isProduction) logger.info(`[dev] Verification link for ${email}: ${link}`);
 }

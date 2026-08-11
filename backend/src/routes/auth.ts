@@ -1,14 +1,14 @@
 import { Router } from "express";
 import * as auth from "../controllers/authController.js";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
-import { authLimiter, otpLimiter, phoneOtpLimiter, statusLimiter } from "../middleware/security.js";
+import { authLimiter, otpLimiter, phoneOtpLimiter, pollLimiter } from "../middleware/security.js";
 
 const router = Router();
 
 // Registration (email-verified gate)
 router.post("/register/initiate", authLimiter, auth.registerInitiate);
 router.post("/register/verify-email", otpLimiter, auth.verifyEmail);
-router.post("/register/status", statusLimiter, auth.registerStatus);
+router.post("/register/status", pollLimiter, auth.registerStatus);
 router.post("/register/options", authLimiter, requireAuth, auth.registerOptions);
 router.post("/register/verify", authLimiter, requireAuth, auth.registerVerify);
 

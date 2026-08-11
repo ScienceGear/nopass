@@ -1,10 +1,13 @@
 import rateLimit from "express-rate-limit";
+import { isProduction } from "../config/env.js";
 import { getClientIp } from "../utils/clientIp.js";
 
-/** Lockout-style limiter for auth endpoints. */
+const FIFTEEN_MIN = 15 * 60 * 1000;
+
+/** Lockout-style limiter for auth endpoints. Relaxed in development for flow testing. */
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 30,
+  windowMs: FIFTEEN_MIN,
+  limit: isProduction ? 30 : 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many attempts. Please try again later." },
@@ -15,8 +18,8 @@ export const authLimiter = rateLimit({
  * keyed per IP * email so one account can't be hammered while others stay up.
  */
 export const otpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 5,
+  windowMs: FIFTEEN_MIN,
+  limit: isProduction ? 5 : 50,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -30,14 +33,13 @@ export const otpLimiter = rateLimit({
 });
 
 /**
- * Generous limiter for the registration-status polling endpoint, keyed per
- * IP * email. The signup page polls this every few seconds while waiting for
- * email verification, so it must not share the strict authLimiter budget that
- * also guards credential and challenge endpoints.
+ * Signup status polling (~every 3s on the "check your inbox" step). Kept separate
+ * from authLimiter so waiting for email verification does not exhaust login limits.
+ * Keyed per IP * email so one signup poll loop cannot starve other clients.
  */
-export const statusLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 90,
+export const pollLimiter = rateLimit({
+  windowMs: FIFTEEN_MIN,
+  limit: isProduction ? 300 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -45,7 +47,7 @@ export const statusLimiter = rateLimit({
       (req.body && typeof req.body === "object" && typeof (req.body as { email?: string }).email === "string"
         ? (req.body as { email: string }).email.trim().toLowerCase()
         : "") || "anon";
-    return `${req.ip ?? "unknown"}:${email}`;
+    return `${getClientIp(req)}:${email}`;
   },
   message: { error: "Too many requests. Please try again later." },
 });
