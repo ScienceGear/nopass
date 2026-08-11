@@ -32,9 +32,11 @@ import { useSession } from "@/lib/session";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login/")({
-  validateSearch: (search: Record<string, unknown>) => {
-    const redirect = typeof search["redirect"] === "string" ? search["redirect"] : undefined;
-    return redirect ? { redirect } : {};
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; email?: string } => {
+    return {
+      redirect: typeof search["redirect"] === "string" ? search["redirect"] : undefined,
+      email: typeof search["email"] === "string" ? search["email"] : undefined,
+    };
   },
   head: () => ({
     meta: [
@@ -72,10 +74,10 @@ const loginTips: AuthTip[] = [
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { redirect } = Route.useSearch();
+  const { redirect, email: initialEmail } = Route.useSearch();
   const { session } = useSession();
   const [stage, setStage] = React.useState<Stage>("email");
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(initialEmail || "");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [result, setResult] = React.useState<LoginResult | null>(null);
   const [challenge, setChallenge] = React.useState<ImageChallengeData | null>(null);

@@ -28,6 +28,7 @@ import {
   postRegisterOptions,
   postRegisterStatus,
   postRegisterVerify,
+  ApiError,
 } from "@/lib/api";
 import { useKeystrokeCapture } from "@/lib/keystroke";
 import { downloadRecoveryCodesPdf } from "@/lib/recoveryPdf";
@@ -82,6 +83,7 @@ function Signup() {
   const [phone, setPhone] = React.useState("");
   const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
   const [error, setError] = React.useState<string | null>(null);
+  const [errorCode, setErrorCode] = React.useState<string | null>(null);
   const [why, setWhy] = React.useState(false);
   const [recoveryCodes, setRecoveryCodes] = React.useState<string[]>([]);
   const [resending, setResending] = React.useState(false);
@@ -184,6 +186,11 @@ function Signup() {
       await postRegisterInitiate({ name, email, phone });
       setStep(2);
     } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorCode(err.code || null);
+      } else {
+        setErrorCode(null);
+      }
       setError(err instanceof Error ? err.message : "Could not start signup.");
     } finally {
       setResending(false);
@@ -310,9 +317,16 @@ function Signup() {
                 </div>
 
                 {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    {error}
-                  </p>
+                  <div className="space-y-3">
+                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      {error}
+                    </p>
+                    {errorCode === "ONBOARDING_INCOMPLETE" && (
+                      <Button variant="outline" className="w-full bg-background" asChild>
+                        <Link to="/login" search={{ email }}>Sign in instead →</Link>
+                      </Button>
+                    )}
+                  </div>
                 ) : null}
 
                 <Button type="submit" size="lg" className="w-full" disabled={resending}>
@@ -512,9 +526,9 @@ function Signup() {
             )}
           </div>
 
-          <p className="mt-5 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-base font-medium text-ink/80 sm:mt-5 sm:text-sm sm:font-normal sm:text-muted-foreground">
             Already with us?{" "}
-            <Link to="/login" className="font-semibold text-ink underline-offset-4 hover:underline">
+            <Link to="/login" className="font-bold text-ink underline-offset-4 hover:underline sm:font-semibold">
               Sign in with a passkey
             </Link>
           </p>
