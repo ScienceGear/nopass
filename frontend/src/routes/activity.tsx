@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getActivity, postRevokeAllSessions, postRevokeSession } from "@/lib/api";
-import { formatLocation } from "@/lib/device";
+import { formatActivityIp, formatLocation } from "@/lib/device";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -154,7 +154,11 @@ function Activity() {
                       <MetaLine label="Device" value={active.deviceLabel} />
                       <MetaLine
                         label="IP"
-                        value={<span className="font-mono text-xs">{active.ipMasked}</span>}
+                        value={
+                          <span className="font-mono text-xs">
+                            {formatActivityIp(active.ipAddress, active.ipMasked, "detail")}
+                          </span>
+                        }
                       />
                       <MetaLine label="Risk" value={<RiskBadge level={active.risk} />} />
                       <MetaLine

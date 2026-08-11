@@ -41,6 +41,7 @@ import { checkEmailBreach } from "../services/hibpService.js";
 import { markDeviceTrusted } from "../services/deviceService.js";
 import { geoFromIp, formatLocation } from "../utils/geo.js";
 import { getClientIp } from "../utils/clientIp.js";
+import { deviceInfoFromRequest } from "../utils/requestMeta.js";
 import {
   generateRecoveryCodes,
   signAccessToken,
@@ -241,11 +242,12 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
 
   if (!record.user.emailVerified) {
     await prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } });
+    const deviceInfo = deviceInfoFromRequest(req);
     await prisma.loginHistory.create({
       data: {
         userId: record.userId,
         eventType: "alert",
-        deviceInfo: "NovaBank Web",
+        deviceInfo,
         ipAddress: getClientIp(req),
         riskScore: 0,
         riskAction: "allow",
@@ -257,11 +259,12 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
 
   await prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } });
   const refreshToken = signRefreshToken({ sub: record.user.id, email: record.user.email });
+  const sessionDeviceInfo = deviceInfoFromRequest(req);
   const session = await prisma.session.create({
     data: {
       userId: record.user.id,
       refreshToken: sha256(refreshToken),
-      deviceInfo: "Onboarding verification",
+      deviceInfo: sessionDeviceInfo,
       ipAddress: getClientIp(req),
       riskScore: 0,
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),

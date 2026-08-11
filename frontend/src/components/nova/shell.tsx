@@ -393,7 +393,7 @@ export function Footer() {
             title="Star this project on GitHub"
             className="flex items-center gap-1.5 rounded-full border border-[oklch(0.207_0.014_251_/_0.12)] bg-muted px-2.5 py-1 font-mono text-[0.625rem] tracking-wider text-ink/85 transition-colors duration-200 hover:border-lime/40 hover:bg-lime-soft hover:text-ink"
           >
-            <Github className="size-3.5" />
+            <Github className="size-3.5 stroke-[2.25]" />
             GitHub
           </a>
         </div>

@@ -14,7 +14,7 @@ import type {
 
 import { getStoredSession, saveSession, clearSession } from "./session";
 import { getDeviceFingerprint, getDeviceInfo } from "./fingerprint";
-import { parseDeviceInfo, type DevicePlatform } from "./device";
+import { parseDeviceInfo, resolveDeviceIconKind, type DeviceIconKind, type DevicePlatform } from "./device";
 
 export const BASE_URL = import.meta.env["VITE_API_BASE_URL"] ?? "/api";
 
@@ -100,6 +100,7 @@ export interface ActivityEvent {
   country: string;
   ipAddress: string | null;
   ipMasked: string;
+  deviceIcon: DeviceIconKind;
   risk: RiskLevel;
   signal: string;
   sessionActive: boolean;
@@ -1021,6 +1022,7 @@ export async function getActivity(): Promise<ActivityEvent[]> {
       device: e.device,
       deviceLabel: parsedDevice.label,
       devicePlatform: parsedDevice.platform,
+      deviceIcon: resolveDeviceIconKind(e.device),
       city,
       country,
       ipAddress: e.ipAddress ?? null,

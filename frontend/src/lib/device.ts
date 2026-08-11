@@ -1,7 +1,18 @@
-import type { LucideIcon } from "lucide-react";
-import { Laptop, Smartphone } from "lucide-react";
-
 export type DevicePlatform = "desktop" | "mobile-android" | "mobile-ios" | "mobile";
+
+export type DeviceIconKind =
+  | "windows-chrome"
+  | "windows-edge"
+  | "windows-firefox"
+  | "windows"
+  | "android"
+  | "ios"
+  | "macos"
+  | "linux"
+  | "firefox"
+  | "chrome"
+  | "safari"
+  | "unknown";
 
 export interface ParsedDevice {
   label: string;
@@ -93,14 +104,97 @@ export function parseDeviceInfo(raw: string): ParsedDevice {
   return { label: raw.length > 64 ? `${browser} · Web` : raw, platform: "mobile" };
 }
 
-export const devicePlatformIcon: Record<DevicePlatform, LucideIcon> = {
-  desktop: Laptop,
-  "mobile-android": Smartphone,
-  "mobile-ios": Smartphone,
-  mobile: Smartphone,
-};
+/** Map a stored device string to a recognizable platform/browser icon. */
+export function resolveDeviceIconKind(raw: string): DeviceIconKind {
+  if (!raw || raw === "unknown device") return "unknown";
+
+  if (!raw.includes("Mozilla/")) {
+    const friendly = parseFriendlyLabel(raw);
+    if (friendly) {
+      const label = friendly.label.toLowerCase();
+      if (friendly.platform === "mobile-android") return "android";
+      if (friendly.platform === "mobile-ios") return "ios";
+      if (label.includes("windows")) {
+        if (label.includes("chrome")) return "windows-chrome";
+        if (label.includes("edge")) return "windows-edge";
+        if (label.includes("firefox")) return "windows-firefox";
+        return "windows";
+      }
+      if (label.includes("linux")) return "linux";
+      if (label.includes("macos") || label.includes("mac")) return label.includes("safari") ? "safari" : "macos";
+      if (label.includes("firefox")) return "firefox";
+      if (label.includes("chrome")) return "chrome";
+      if (label.includes("safari")) return "safari";
+    }
+  }
+
+  const ua = raw.toLowerCase();
+  const browser = detectBrowser(ua);
+
+  if (ua.includes("android")) return "android";
+  if (/iphone|ipod/.test(ua) || (ua.includes("macintosh") && ua.includes("mobile")) || ua.includes("ipad")) {
+    return "ios";
+  }
+  if (ua.includes("windows")) {
+    if (browser === "Edge") return "windows-edge";
+    if (browser === "Firefox") return "windows-firefox";
+    if (browser === "Chrome") return "windows-chrome";
+    return "windows";
+  }
+  if (ua.includes("linux")) return "linux";
+  if (ua.includes("macintosh") || ua.includes("mac os") || ua.includes("macbook")) {
+    return browser === "Safari" ? "safari" : "macos";
+  }
+  if (browser === "Firefox") return "firefox";
+  if (browser === "Chrome") return "chrome";
+  if (browser === "Safari") return "safari";
+
+  return "unknown";
+}
+
+function normalizeIp(ip: string): string {
+  const trimmed = ip.trim();
+  if (trimmed.startsWith("::ffff:")) return trimmed.slice(7);
+  if (trimmed === "::1") return "127.0.0.1";
+  return trimmed;
+}
+
+/** True for loopback, RFC1918, and other non-routable addresses. */
+export function isPrivateIp(ip: string): boolean {
+  if (!ip || ip === "unknown") return true;
+  const normalized = normalizeIp(ip);
+
+  if (normalized === "127.0.0.1" || normalized.startsWith("127.")) return true;
+  if (normalized.startsWith("10.")) return true;
+  if (normalized.startsWith("192.168.")) return true;
+  if (normalized.startsWith("169.254.")) return true;
+  if (normalized.startsWith("172.")) {
+    const second = Number.parseInt(normalized.split(".")[1] ?? "0", 10);
+    if (second >= 16 && second <= 31) return true;
+  }
+  if (normalized.includes(":")) {
+    const lower = normalized.toLowerCase();
+    if (lower.startsWith("fe80:") || lower.startsWith("fc") || lower.startsWith("fd")) return true;
+  }
+  return false;
+}
+
+/** Activity IP display — full address in detail view; private IPs unmasked everywhere. */
+export function formatActivityIp(
+  ip: string | null | undefined,
+  masked: string,
+  view: "list" | "detail",
+): string {
+  if (!ip || ip === "unknown") return masked || "Unknown IP";
+  const normalized = normalizeIp(ip);
+  if (view === "detail" || isPrivateIp(normalized)) return normalized;
+  return masked || normalized;
+}
 
 export function formatLocation(city: string, country: string): string {
+  if (city === "Local network") return "Local network";
   if (city && country) return `${city}, ${country}`;
-  return city || country || "Unknown location";
+  if (city && city !== "Unknown") return city;
+  if (country) return country;
+  return "Unknown location";
 }
