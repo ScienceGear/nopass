@@ -16,10 +16,17 @@ import adminRoutes from "./routes/admin.js";
 const app = express();
 app.disable("x-powered-by");
 
-// Render (and other platforms) terminate TLS at a proxy; without this, req.ip is
-// the proxy IP and every rate limiter shares one bucket. Express uses the first
-// entry of X-Forwarded-For, which the proxy sets to the real client IP.
-app.set("trust proxy", 1);
+/** Honour X-Forwarded-* from reverse proxies (Cloudflare, nginx, Vite dev proxy). */
+const trustProxy = env.TRUST_PROXY.trim();
+if (trustProxy === "true" || trustProxy === "1") {
+  app.set("trust proxy", true);
+} else if (/^\d+$/.test(trustProxy)) {
+  app.set("trust proxy", Number.parseInt(trustProxy, 10));
+} else if (isProduction) {
+  app.set("trust proxy", 1);
+} else {
+  app.set("trust proxy", "loopback");
+}
 
 /**
  * CORS allowlist. Requests with no Origin header (curl, same-origin, server

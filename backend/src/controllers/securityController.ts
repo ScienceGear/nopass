@@ -3,6 +3,7 @@ import { prisma } from "../config/db.js";
 import { AppError, asyncHandler } from "../middleware/errorHandler.js";
 import { generateRecoveryCodes } from "../utils/crypto.js";
 import { friendlyDeviceName, maskIp } from "../utils/device.js";
+import { geoFromIpCached, locationPartsFromIp } from "../utils/geo.js";
 import { notificationPrefsSchema, activityQuerySchema } from "../utils/validators.js";
 import {
   buildAdditionalRegistrationOptions,
@@ -81,8 +82,8 @@ export const activity: RequestHandler = asyncHandler(async (req, res) => {
   const isCurrent = (sessionId: string | null | undefined) =>
     Boolean(currentSessionId && sessionId && sessionId === currentSessionId);
 
-  const events = [
-    ...logins.map((l) => {
+  const loginEvents = await Promise.all(
+    logins.map(async (l) => {
       let sessionId: string | null = null;
       let signal: string | null = null;
       try {
@@ -94,17 +95,27 @@ export const activity: RequestHandler = asyncHandler(async (req, res) => {
       } catch {
         /* details is a plain string */
       }
+
+      const geo = await geoFromIpCached(l.ipAddress);
+      const { city, country, location } = locationPartsFromIp(l.ipAddress, geo);
+
       return {
         id: l.id,
         type: l.eventType,
-        title: l.eventType === "login" ? "Sign-in" : l.eventType === "transfer" ? "Transfer" : l.eventType,
+        title:
+          l.eventType === "login"
+            ? "Sign-in"
+            : l.eventType === "transfer"
+              ? "Transfer"
+              : l.eventType,
         detail: l.details,
         signal,
-        device: friendlyDeviceName(l.deviceInfo),
-        rawDevice: l.deviceInfo,
+        device: l.deviceInfo,
+        location,
+        city,
+        country,
         ipAddress: l.ipAddress,
         ipMasked: maskIp(l.ipAddress),
-        location: l.location,
         riskScore: l.riskScore,
         riskAction: l.riskAction,
         timestamp: l.createdAt,
@@ -113,16 +124,22 @@ export const activity: RequestHandler = asyncHandler(async (req, res) => {
         isCurrent: isCurrent(sessionId),
       };
     }),
+  );
+
+  const events = [
+    ...loginEvents,
     ...transfers.map((t) => ({
       id: `tx-${t.id}`,
       type: "transaction",
       title: `Sent to ${t.recipient}`,
       detail: `${t.amount.toString()} INR`,
       device: "NovaBank Web",
-      rawDevice: "NovaBank Web",
-      ipAddress: null,
-      ipMasked: "Unknown IP",
       location: null,
+      city: null,
+      country: null,
+      ipAddress: null,
+      ipMasked: null,
+      signal: null,
       riskScore: 0,
       riskAction: "allow",
       timestamp: t.createdAt,

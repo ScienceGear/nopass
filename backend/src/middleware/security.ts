@@ -1,4 +1,5 @@
 import rateLimit from "express-rate-limit";
+import { getClientIp } from "../utils/clientIp.js";
 
 /** Lockout-style limiter for auth endpoints. */
 export const authLimiter = rateLimit({
@@ -23,7 +24,7 @@ export const otpLimiter = rateLimit({
       (req.body && typeof req.body === "object" && typeof (req.body as { email?: string }).email === "string"
         ? (req.body as { email: string }).email.trim().toLowerCase()
         : "") || "anon";
-    return `${req.ip ?? "unknown"}:${email}`;
+    return `${getClientIp(req)}:${email}`;
   },
   message: { error: "Too many attempts. Please try again later." },
 });

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { isPrivateIp } from "./clientIp.js";
 import { logger } from "./logger.js";
 
 export interface GeoInfo {
@@ -8,6 +9,8 @@ export interface GeoInfo {
   lat?: number;
   lon?: number;
 }
+
+const geoCache = new Map<string, GeoInfo | null>();
 
 /** Great-circle distance between two points in kilometres. */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -21,16 +24,18 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-/** Free-tier geolocation. Never throws  returns null on any failure. */
+/** Free-tier geolocation. Never throws — returns null on any failure or private IP. */
 export async function geoFromIp(ip: string): Promise<GeoInfo | null> {
-  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
-    return { city: "Localhost", country: "Local", countryCode: "LOCAL" };
-  }
+  if (isPrivateIp(ip)) return null;
   try {
-    const { data } = await axios.get<{ city?: string; country_name?: string; country_code?: string; latitude?: number; longitude?: number }>(
-      `https://ipapi.co/${ip}/json/`,
-      { timeout: 2500 },
-    );
+    const { data } = await axios.get<{
+      city?: string;
+      country_name?: string;
+      country_code?: string;
+      latitude?: number;
+      longitude?: number;
+      error?: boolean;
+    }>(`https://ipapi.co/${ip}/json/`, { timeout: 2500 });
     if (data && "error" in data) return null;
     return {
       city: data.city,
@@ -45,5 +50,34 @@ export async function geoFromIp(ip: string): Promise<GeoInfo | null> {
   }
 }
 
+/** Cached wrapper — avoids repeated lookups for the same IP in a single request batch. */
+export async function geoFromIpCached(ip: string): Promise<GeoInfo | null> {
+  if (geoCache.has(ip)) return geoCache.get(ip)!;
+  const result = await geoFromIp(ip);
+  geoCache.set(ip, result);
+  return result;
+}
+
 export const formatLocation = (geo: GeoInfo | null): string | null =>
-  geo && (geo.city || geo.country) ? `${geo.city ?? ""}${geo.city && geo.country ? ", " : ""}${geo.country ?? ""}` || null : null;
+  geo && (geo.city || geo.country)
+    ? `${geo.city ?? ""}${geo.city && geo.country ? ", " : ""}${geo.country ?? ""}` || null
+    : null;
+
+export function locationPartsFromIp(
+  ip: string,
+  geo: GeoInfo | null,
+): { city: string; country: string; location: string | null } {
+  if (geo?.city || geo?.country) {
+    const city = geo.city ?? "Unknown";
+    const country = geo.country ?? "";
+    return {
+      city,
+      country,
+      location: formatLocation(geo),
+    };
+  }
+  if (isPrivateIp(ip)) {
+    return { city: "Local network", country: "", location: "Local network" };
+  }
+  return { city: "Unknown", country: "", location: null };
+}

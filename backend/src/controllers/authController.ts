@@ -40,6 +40,7 @@ import {
 import { checkEmailBreach } from "../services/hibpService.js";
 import { markDeviceTrusted } from "../services/deviceService.js";
 import { geoFromIp, formatLocation } from "../utils/geo.js";
+import { getClientIp } from "../utils/clientIp.js";
 import {
   generateRecoveryCodes,
   signAccessToken,
@@ -245,7 +246,7 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
         userId: record.userId,
         eventType: "alert",
         deviceInfo: "NovaBank Web",
-        ipAddress: req.ip ?? "unknown",
+        ipAddress: getClientIp(req),
         riskScore: 0,
         riskAction: "allow",
         details: JSON.stringify({ kind: "email_verified" }),
@@ -261,7 +262,7 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
       userId: record.user.id,
       refreshToken: sha256(refreshToken),
       deviceInfo: "Onboarding verification",
-      ipAddress: req.ip ?? "unknown",
+      ipAddress: getClientIp(req),
       riskScore: 0,
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
     },
@@ -320,12 +321,12 @@ export const onboardingPasskeyVerify: RequestHandler = asyncHandler(async (req, 
       nickname: "Primary Passkey",
     },
   });
-  const geo = await geoFromIp(req.ip ?? "unknown");
+  const geo = await geoFromIp(getClientIp(req));
   await markDeviceTrusted({
     userId: user.id,
     rawFingerprint: deviceFingerprint,
     deviceInfo,
-    ipAddress: req.ip ?? "unknown",
+    ipAddress: getClientIp(req),
     location: formatLocation(geo),
   });
   const { codes, hashes } = await generateRecoveryCodes(10);
@@ -426,13 +427,13 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
     },
   });
 
-  const geo = await geoFromIp(req.ip ?? "unknown");
+  const geo = await geoFromIp(getClientIp(req));
   const location = formatLocation(geo);
   await markDeviceTrusted({
     userId: user.id,
     rawFingerprint: deviceFingerprint,
     deviceInfo,
-    ipAddress: req.ip ?? "unknown",
+    ipAddress: getClientIp(req),
     location,
   });
 
@@ -447,7 +448,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
       userId: user.id,
       refreshToken: sha256(refreshToken),
       deviceInfo,
-      ipAddress: req.ip ?? "unknown",
+      ipAddress: getClientIp(req),
       riskScore: 0,
       expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
     },
@@ -459,7 +460,7 @@ export const registerVerify: RequestHandler = asyncHandler(async (req, res) => {
       userId: user.id,
       eventType: "login",
       deviceInfo,
-      ipAddress: req.ip ?? "unknown",
+      ipAddress: getClientIp(req),
       location,
       riskScore: 0,
       riskAction: "allow",
@@ -532,7 +533,7 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
     data: { counter: newCounter, lastUsedAt: new Date() },
   });
 
-  const ip = req.ip ?? "unknown";
+  const ip = getClientIp(req);
   const ctx: LoginContext = {
     email,
     deviceFingerprint: body.deviceFingerprint,
@@ -622,20 +623,20 @@ export const requestEmailLogin: RequestHandler = asyncHandler(async (req, res) =
     deviceInfo: body.deviceInfo,
     keystrokes: body.keystrokes,
   };
-  const input = await assessContext(user, ctx, req.ip ?? "unknown");
+  const input = await assessContext(user, ctx, getClientIp(req));
   const assessment = evaluateRisk(input);
   if (assessment.action === "block") {
     await sendAlertEmail(
       email,
       "NovaBank blocked a sign-in attempt",
-      `We blocked a sign-in request from ${body.deviceInfo} (${req.ip}). If this was you, contact support.`,
+      `We blocked a sign-in request from ${body.deviceInfo} (${getClientIp(req)}). If this was you, contact support.`,
     );
     await prisma.loginHistory.create({
       data: {
         userId: user.id,
         eventType: "login",
         deviceInfo: body.deviceInfo,
-        ipAddress: req.ip ?? "unknown",
+        ipAddress: getClientIp(req),
         location: input.location,
         riskScore: assessment.score,
         riskAction: "block",
@@ -670,13 +671,13 @@ export const verifyEmailLogin: RequestHandler = asyncHandler(async (req, res) =>
     deviceInfo: body.deviceInfo,
     keystrokes: body.keystrokes,
   };
-  const input = await assessContext(user, ctx, req.ip ?? "unknown");
+  const input = await assessContext(user, ctx, getClientIp(req));
   const assessment = evaluateRisk(input);
   if (assessment.action === "block") {
     await sendAlertEmail(
       email,
       "NovaBank blocked a sign-in attempt",
-      `We blocked a sign-in from ${body.deviceInfo} (${req.ip}). If this was you, contact support.`,
+      `We blocked a sign-in from ${body.deviceInfo} (${getClientIp(req)}). If this was you, contact support.`,
     );
     throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
   }
@@ -686,7 +687,7 @@ export const verifyEmailLogin: RequestHandler = asyncHandler(async (req, res) =>
     ctx,
     assessment.score,
     "allow",
-    req.ip ?? "unknown",
+    getClientIp(req),
   );
   res.json({ verified: true, accessToken, refreshToken, user: outUser });
 });
@@ -713,7 +714,7 @@ export const recoverLogin: RequestHandler = asyncHandler(async (req, res) => {
   await sendAlertEmail(
     email,
     "A recovery code was used to sign in",
-    `A recovery code signed in from ${body.deviceInfo} (${req.ip}). If this wasn't you, contact support immediately.`,
+    `A recovery code signed in from ${body.deviceInfo} (${getClientIp(req)}). If this wasn't you, contact support immediately.`,
   );
 
   const ctx: LoginContext = {
@@ -727,7 +728,7 @@ export const recoverLogin: RequestHandler = asyncHandler(async (req, res) => {
     ctx,
     0,
     "allow",
-    req.ip ?? "unknown",
+    getClientIp(req),
   );
   res.json({ verified: true, accessToken, refreshToken, user: outUser });
 });
@@ -957,7 +958,7 @@ export const stepUpVerify: RequestHandler = asyncHandler(async (req, res) => {
 
   if (!ok) throw new AppError(401, "Step-up verification failed.");
 
-  const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, 45, "allow", req.ip ?? "unknown");
+  const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, 45, "allow", getClientIp(req));
   res.json({ verified: true, accessToken, refreshToken, user: outUser });
 });
 
@@ -1045,7 +1046,7 @@ export const qrExchange: RequestHandler = asyncHandler(async (req, res) => {
   if (!user) throw new AppError(404, "User not found.");
 
   const ctx: LoginContext = { email: user.email, deviceFingerprint, deviceInfo, keystrokes };
-  const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, 15, "allow", req.ip ?? "unknown");
+  const { accessToken, refreshToken, user: outUser } = await completeLogin(user, ctx, 15, "allow", getClientIp(req));
   res.json({ accessToken, refreshToken, user: outUser });
 });
 

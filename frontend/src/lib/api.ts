@@ -14,6 +14,7 @@ import type {
 
 import { getStoredSession, saveSession, clearSession } from "./session";
 import { getDeviceFingerprint, getDeviceInfo } from "./fingerprint";
+import { parseDeviceInfo, type DevicePlatform } from "./device";
 
 export const BASE_URL = import.meta.env["VITE_API_BASE_URL"] ?? "/api";
 
@@ -93,8 +94,11 @@ export interface ActivityEvent {
   type: "login" | "transfer" | "alert" | "passkey";
   timestamp: string;
   device: string;
+  deviceLabel: string;
+  devicePlatform: DevicePlatform;
   city: string;
   country: string;
+  ipAddress: string | null;
   ipMasked: string;
   risk: RiskLevel;
   signal: string;
@@ -975,8 +979,10 @@ export async function getActivity(): Promise<ActivityEvent[]> {
       signal: string | null;
       device: string;
       ipAddress: string | null;
-      ipMasked: string;
+      ipMasked: string | null;
       location: string | null;
+      city: string | null;
+      country: string | null;
       riskScore: number;
       riskAction: string;
       timestamp: string;
@@ -988,21 +994,42 @@ export async function getActivity(): Promise<ActivityEvent[]> {
   }>("/security/activity", { headers: authHeaders() });
 
   return res.events.map((e) => {
-    const [city = "Unknown", country = "Unknown"] = (e.location ?? "Unknown, Unknown").split(", ");
+    let detail = e.detail;
+    let sessionId = e.sessionId;
+    let signal = e.signal;
+    try {
+      const parsed = JSON.parse(e.detail);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.signal === "string") signal = parsed.signal;
+        if (typeof parsed.sessionId === "string") {
+          sessionId = sessionId ?? parsed.sessionId;
+        }
+        detail = signal ?? detail;
+      }
+    } catch {
+      /* detail is a plain string */
+    }
+
+    const parsedDevice = parseDeviceInfo(e.device);
+    const city = e.city ?? (e.location?.split(",")[0]?.trim() || "Unknown");
+    const country = e.country ?? (e.location?.split(",")[1]?.trim() || "");
     const isLogin = e.type === "login";
     return {
       id: e.id,
       type: (e.type === "transaction" ? "transfer" : e.type) as ActivityEvent["type"],
       timestamp: e.timestamp,
       device: e.device,
+      deviceLabel: parsedDevice.label,
+      devicePlatform: parsedDevice.platform,
       city,
       country,
-      ipMasked: e.ipMasked,
+      ipAddress: e.ipAddress ?? null,
+      ipMasked: e.ipMasked ?? "Unknown IP",
       risk: e.riskScore > 60 ? "high" : e.riskScore > 30 ? "medium" : "low",
-      signal: e.signal || e.detail || e.title,
-      sessionActive: e.sessionActive,
-      isCurrent: e.isCurrent,
-      ...(e.sessionId ? { sessionId: e.sessionId } : {}),
+      signal: signal || detail || e.title,
+      sessionActive: e.sessionActive ?? (isLogin && e.riskAction === "allow"),
+      isCurrent: e.isCurrent ?? false,
+      ...(sessionId ? { sessionId } : {}),
     };
   });
 }

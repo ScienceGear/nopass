@@ -12,10 +12,10 @@ import {
   ShoppingBag,
   Coffee,
   ShieldAlert,
-  MonitorSmartphone,
 } from "lucide-react";
 import type { ActivityEvent, Transaction } from "@/lib/api";
 import { formatINR } from "@/lib/api";
+import { devicePlatformIcon, formatLocation } from "@/lib/device";
 import { cn } from "@/lib/utils";
 import { RiskBadge } from "./primitives";
 
@@ -110,7 +110,11 @@ export function ActivityRow({
   onRevoke?: () => void;
   revoking?: boolean;
 }) {
-  const Icon = activityIcon[event.type];
+  const fallbackIcon = activityIcon[event.type];
+  const DeviceIcon = devicePlatformIcon[event.devicePlatform] ?? fallbackIcon;
+  const Icon = event.type === "transfer" || event.type === "alert" ? fallbackIcon : DeviceIcon;
+  const locationLabel = formatLocation(event.city, event.country);
+
   return (
     <div
       className={cn(
@@ -136,23 +140,23 @@ export function ActivityRow({
           <Icon />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {event.device}
-            {event.isCurrent ? (
-              <span className="ml-2 inline-block rounded-full bg-lime-soft px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-ink">
-                This device
-              </span>
-            ) : null}
-            <span className="font-normal text-muted-foreground"> · {event.city}</span>
-          </p>
-          <p className="truncate font-mono text-[0.6875rem] tracking-[0.04em] text-muted-foreground">
-            {fullTime(event.timestamp)} · IP {event.ipMasked}
-          </p>
-        </div>
+  <p className="truncate text-sm font-semibold">
+    {event.deviceLabel}
+    {event.isCurrent ? (
+      <span className="ml-2 inline-block rounded-full bg-lime-soft px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-ink">
+        This device
+      </span>
+    ) : null}
+    <span className="font-normal text-muted-foreground"> · {locationLabel}</span>
+  </p>
+  <p className="truncate font-mono text-[0.6875rem] tracking-[0.04em] text-muted-foreground">
+    {fullTime(event.timestamp)} · IP {event.ipMasked}
+  </p>
+</div>
       </button>
       <div className="flex shrink-0 items-center gap-2 pl-13 sm:pl-0">
         <RiskBadge level={event.risk} />
-        {event.sessionActive ? (
+        {event.sessionActive && event.sessionId ? (
           <button
             type="button"
             onClick={onRevoke}
@@ -168,14 +172,5 @@ export function ActivityRow({
         )}
       </div>
     </div>
-  );
-}
-
-export function DeviceLine({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-      <MonitorSmartphone className="size-4 shrink-0" />
-      {children}
-    </p>
   );
 }

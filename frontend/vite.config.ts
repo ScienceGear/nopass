@@ -25,6 +25,18 @@ export default defineConfig({
         "/api": {
           target: process.env["API_PROXY_TARGET"] ?? "http://localhost:3001",
           changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on("proxyReq", (proxyReq, req) => {
+              const remote = req.socket?.remoteAddress;
+              if (remote) {
+                const existing = req.headers["x-forwarded-for"];
+                const chain = existing
+                  ? `${Array.isArray(existing) ? existing.join(", ") : existing}, ${remote}`
+                  : remote;
+                proxyReq.setHeader("X-Forwarded-For", chain);
+              }
+            });
+          },
         },
       },
     },

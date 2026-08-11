@@ -344,9 +344,9 @@ export function Footer() {
           </p>
         </div>
         <a
-          href="https://github.com/ScienceGear/nopass"
+          href={support.github}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-lime transition-transform duration-200 hover:-translate-y-0.5"
         >
           <Github className="size-4" /> Star on GitHub
@@ -386,12 +386,12 @@ export function Footer() {
         </div>
         <div className="flex items-center justify-center gap-2">
           <a
-            href="https://github.com/ScienceGear/nopass"
+            href={support.github}
             target="_blank"
-            rel="noreferrer"
-            aria-label="NovaBank source code on GitHub"
-            className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-mono text-[0.625rem] tracking-wider text-muted-foreground transition-colors duration-200 hover:bg-lime-soft hover:text-ink"
+            rel="noopener noreferrer"
+            aria-label="NovaBank source code on GitHub (opens in a new tab)"
             title="Star this project on GitHub"
+            className="flex items-center gap-1.5 rounded-full border border-[oklch(0.207_0.014_251_/_0.12)] bg-muted px-2.5 py-1 font-mono text-[0.625rem] tracking-wider text-ink/85 transition-colors duration-200 hover:border-lime/40 hover:bg-lime-soft hover:text-ink"
           >
             <Github className="size-3.5" />
             GitHub

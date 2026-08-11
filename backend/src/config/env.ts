@@ -30,6 +30,8 @@ const envSchema = z.object({
   TEXTBEE_BASE_URL: z.string().default("https://api.textbee.dev/api/v1"),
   ADMIN_EMAILS: z.string().default(""),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  /** Proxy hop count for Express `trust proxy` (default: 1 in production). */
+  TRUST_PROXY: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

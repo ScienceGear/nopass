@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getActivity, postRevokeAllSessions, postRevokeSession } from "@/lib/api";
+import { formatLocation } from "@/lib/device";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -61,12 +62,15 @@ function Activity() {
   );
   const active = events.find((e) => e.id === selected) ?? events[0];
 
-  async function revoke(id: string) {
-    setRevoking(id);
-    await postRevokeSession(id);
-    setRevoking(null);
-    toast.success("Session revoked", { description: "That device must sign in again." });
-    qc.invalidateQueries({ queryKey: ["activity"] });
+  async function revoke(sessionId: string, eventId: string) {
+    setRevoking(eventId);
+    try {
+      await postRevokeSession(sessionId);
+      toast.success("Session revoked", { description: "That device must sign in again." });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+    } finally {
+      setRevoking(null);
+    }
   }
 
   return (
@@ -114,7 +118,7 @@ function Activity() {
                         event={e}
                         selected={active?.id === e.id}
                         onSelect={() => setSelected(e.id)}
-                        onRevoke={() => revoke(e.id)}
+                        onRevoke={() => e.sessionId && revoke(e.sessionId, e.id)}
                         revoking={revoking === e.id}
                       />
                     ))
@@ -142,11 +146,12 @@ function Activity() {
                         data-slot="activity-map"
                       />
                       <span className="-mt-40 flex items-center gap-2 text-sm font-medium">
-                        <MapPin className="size-4" /> {active.city}, {active.country}
+                        <MapPin className="size-4" />{" "}
+                        {formatLocation(active.city, active.country)}
                       </span>
                     </div>
                     <div className="mt-4 hairline-y">
-                      <MetaLine label="Device" value={active.device} />
+                      <MetaLine label="Device" value={active.deviceLabel} />
                       <MetaLine
                         label="IP"
                         value={<span className="font-mono text-xs">{active.ipMasked}</span>}

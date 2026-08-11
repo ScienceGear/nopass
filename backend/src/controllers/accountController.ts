@@ -9,6 +9,7 @@ import { evaluateRisk, amountRisk } from "../services/riskEngine.js";
 import { verifyImageChallenge, createImageChallenge } from "../services/imageChallengeService.js";
 import { transferSchema, activityQuerySchema } from "../utils/validators.js";
 import { logger } from "../utils/logger.js";
+import { getClientIp } from "../utils/clientIp.js";
 
 const TRANSFER_TOKEN_TTL = 15 * 60; // seconds
 
@@ -99,7 +100,7 @@ export const transferCreate: RequestHandler = asyncHandler(async (req, res) => {
   if (!user) throw new AppError(404, "User not found.");
   if (Number(user.balance) < amount) throw new AppError(400, "Insufficient balance.");
 
-  const ip = req.ip ?? "unknown";
+  const ip = getClientIp(req);
   const ctx: RiskContextInput = { email: user.email, deviceFingerprint, deviceInfo, keystrokes };
   const signals = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk({ ...signals, amountRisk: amountRisk(amount) });
