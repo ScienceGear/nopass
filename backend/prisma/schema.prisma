@@ -57,6 +57,7 @@ model TrustedDevice {
   deviceInfo  String // parsed UA string
   ipAddress   String
   location    String? // city, country
+  isRevoked   Boolean  @default(false)
   lastSeen    DateTime @updatedAt
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)

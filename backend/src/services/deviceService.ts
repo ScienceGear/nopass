@@ -36,5 +36,50 @@ export async function markDeviceTrusted(opts: {
     },
   });
 }
+export async function getUserDevices(userId: string, currentDeviceId?: string) {
+  const devices = await prisma.trustedDevice.findMany({
+    where: { 
+      userId, 
+      isRevoked: false 
+    },
+    orderBy: { lastSeen: 'desc' },
+  });
 
+  const now = new Date();
+
+  return devices.map((device) => {
+    const isActive = (now.getTime() - new Date(device.lastSeen).getTime()) < 5 * 60 * 1000;
+
+    return {
+      id: device.id,
+      deviceInfo: device.deviceInfo,
+      ipAddress: device.ipAddress,
+      location: device.location,
+      lastSeen: device.lastSeen,
+      isCurrentDevice: device.id === currentDeviceId,
+      status: isActive ? 'Active' : 'Idle',
+    };
+  });
+}
+
+export async function revokeDevice(userId: string, deviceId: string) {
+  return prisma.trustedDevice.updateMany({
+    where: { 
+      id: deviceId, 
+      userId 
+    },
+    data: { isRevoked: true },
+  });
+}
+
+export async function revokeAllOtherDevices(userId: string, currentDeviceId: string) {
+  return prisma.trustedDevice.updateMany({
+    where: {
+      userId,
+      id: { not: currentDeviceId },
+      isRevoked: false,
+    },
+    data: { isRevoked: true },
+  });
+}
 export type { GeoInfo };
