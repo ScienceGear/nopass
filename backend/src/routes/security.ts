@@ -17,6 +17,7 @@ router.get("/recovery-codes", security.listRecoveryCodesStatus);
 router.post("/recovery-codes/rotate", security.rotateRecoveryCodes);
 router.get("/devices", security.listDevices);
 router.delete("/devices/:id", security.revokeDevice);
+router.post("/devices/revoke-all", security.massRevokeDevices);
 router.get("/notification-prefs", security.getNotificationPrefs);
 router.put("/notification-prefs", security.updateNotificationPrefs);
 router.post("/sessions/:id/revoke", security.revokeSession);
