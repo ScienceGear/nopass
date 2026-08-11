@@ -253,7 +253,7 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
             <X className="size-5" />
           </button>
         </div>
-        <nav className="mt-10 flex flex-col">
+        <nav className="mt-10 flex min-h-0 flex-1 flex-col overflow-y-auto">
           {links.map((l, i) => (
             <Link
               key={l.to}
@@ -267,7 +267,7 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
             </Link>
           ))}
         </nav>
-        <div className="mt-auto space-y-3 pt-8">
+        <div className="mt-auto space-y-3 pt-8 shrink-0">
           <Button className="w-full" size="lg" asChild>
             <Link to={session ? "/dashboard" : "/signup"}>
               {session ? "Go to dashboard" : "Open account"}
@@ -277,7 +277,20 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
             <Button className="w-full" size="lg" variant="outline" asChild>
               <Link to="/login">Log in with a passkey</Link>
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              className="w-full"
+              size="lg"
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                clearSession();
+                window.location.assign("/");
+              }}
+            >
+              Log out
+            </Button>
+          )}
         </div>
       </div>
     </>
@@ -377,9 +390,10 @@ export function Footer() {
             target="_blank"
             rel="noreferrer"
             aria-label="NovaBank source code on GitHub"
-            className="grid size-8 place-items-center rounded-full bg-muted font-mono text-[0.625rem] tracking-wider text-muted-foreground transition-colors duration-200 hover:bg-lime-soft hover:text-ink"
+            className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-mono text-[0.625rem] tracking-wider text-muted-foreground transition-colors duration-200 hover:bg-lime-soft hover:text-ink"
             title="Star this project on GitHub"
           >
+            <Github className="size-3.5" />
             GitHub
           </a>
         </div>
