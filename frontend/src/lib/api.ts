@@ -1521,6 +1521,55 @@ export async function getAdminIpLookup(ip: string) {
   }>(`/admin/ip/${encodeURIComponent(ip)}`, { headers: authHeaders() });
 }
 
+export interface AdminUserListItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  onboardingStep: string;
+  createdAt: string;
+  passkeysCount: number;
+  activeSessionsCount: number;
+  activeSessions: {
+    id: string;
+    device: string;
+    ipAddress: string;
+    location: string | null;
+    createdAt: string;
+    active: boolean;
+  }[];
+}
+
+export async function getAdminUsersList() {
+  return apiFetch<{ users: AdminUserListItem[] }>("/admin/users", { headers: authHeaders() });
+}
+
+export async function deleteAdminUser(userId: string) {
+  return apiFetch<{ ok: boolean; deletedUserId: string; email: string }>(
+    `/admin/user/${encodeURIComponent(userId)}`,
+    { method: "DELETE", headers: authHeaders() },
+  );
+}
+
+export async function deleteAdminUserPasskeys(userId: string, passkeyId?: string) {
+  const url = passkeyId
+    ? `/admin/user/${encodeURIComponent(userId)}/passkeys/${encodeURIComponent(passkeyId)}`
+    : `/admin/user/${encodeURIComponent(userId)}/passkeys`;
+  return apiFetch<{ ok: boolean; userId: string; email: string }>(url, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+
+export async function postAdminSendUserResetEmail(userId: string) {
+  return apiFetch<{ ok: boolean; sentTo: string; verifyLink: string }>(
+    `/admin/user/${encodeURIComponent(userId)}/send-reset-email`,
+    { method: "POST", headers: authHeaders() },
+  );
+}
+
 /* ── Session helpers for the UI ────────────────────────────────────────── */
 
 export async function postLogout() {

@@ -50,7 +50,7 @@ import {
   randomToken,
   verifyPassword as verifyRecoveryCode,
 } from "../utils/crypto.js";
-import { env, isProduction } from "../config/env.js";
+import { env, isProduction, getAppOrigin } from "../config/env.js";
 import {
   loginOptionsSchema,
   loginVerifySchema,
@@ -229,7 +229,7 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
     update: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
   });
 
-  const verifyLink = `${env.WEBAUTHN_ORIGIN}/verify-email?token=${encodeURIComponent(token)}`;
+  const verifyLink = `${getAppOrigin()}/verify-email?token=${encodeURIComponent(token)}`;
   await sendVerificationEmail(normalizedEmail, name.trim(), verifyLink);
 
   res.status(existing ? 200 : 201).json({

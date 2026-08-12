@@ -3,6 +3,9 @@ import { prisma } from "../config/db.js";
 import { AppError, asyncHandler } from "../middleware/errorHandler.js";
 import { geoFromIp } from "../utils/geo.js";
 import { friendlyDeviceName } from "../utils/device.js";
+import { randomToken, sha256 } from "../utils/crypto.js";
+import { getAppOrigin } from "../config/env.js";
+import { sendVerificationEmail } from "../services/emailService.js";
 
 interface EventDetails {
   lat?: number | null;
@@ -24,9 +27,10 @@ function parseEventDetails(raw: string | null): EventDetails {
 
 export const securityOverview: RequestHandler = asyncHandler(async (_req, res) => {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const now = new Date();
   const [users, activeSessions, riskyEvents, blockedEvents] = await Promise.all([
     prisma.user.count(),
-    prisma.session.count({ where: { revoked: false, expiresAt: { gt: new Date() } } }),
+    prisma.session.count({ where: { revoked: false, expiresAt: { gt: now } } }),
     prisma.loginHistory.findMany({
       where: { createdAt: { gte: since }, OR: [{ riskScore: { gt: 30 } }, { riskAction: "block" }] },
       include: { user: { select: { id: true, name: true, email: true, phone: true } } },
@@ -58,6 +62,101 @@ export const securityOverview: RequestHandler = asyncHandler(async (_req, res) =
   });
 });
 
+/** List all users in the system with their active session counts and passkey counts. */
+export const listUsers: RequestHandler = asyncHandler(async (_req, res) => {
+  const now = new Date();
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      emailVerified: true,
+      phoneVerified: true,
+      onboardingStep: true,
+      createdAt: true,
+      credentials: { select: { id: true, nickname: true, lastUsedAt: true } },
+      sessions: {
+        where: { revoked: false, expiresAt: { gt: now } },
+        select: { id: true, deviceInfo: true, ipAddress: true, location: true, createdAt: true, expiresAt: true },
+      },
+    },
+  });
+
+  res.json({
+    users: users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      phone: u.phone,
+      emailVerified: u.emailVerified,
+      phoneVerified: u.phoneVerified,
+      onboardingStep: u.onboardingStep,
+      createdAt: u.createdAt,
+      passkeysCount: u.credentials.length,
+      activeSessionsCount: u.sessions.length,
+      activeSessions: u.sessions.map((s) => ({
+        id: s.id,
+        device: friendlyDeviceName(s.deviceInfo),
+        ipAddress: s.ipAddress,
+        location: s.location,
+        createdAt: s.createdAt,
+        active: true,
+      })),
+    })),
+  });
+});
+
+/** Delete a user account and all associated entities (admin control). */
+export const deleteUser: RequestHandler = asyncHandler(async (req, res) => {
+  const userId = req.params.id as string;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User account not found.");
+
+  await prisma.user.delete({ where: { id: userId } });
+  res.json({ ok: true, deletedUserId: userId, email: user.email });
+});
+
+/** Revoke / Delete passkeys for a user. */
+export const deleteUserPasskey: RequestHandler = asyncHandler(async (req, res) => {
+  const userId = req.params.id as string;
+  const passkeyId = req.params.passkeyId as string | undefined;
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User account not found.");
+
+  if (passkeyId && passkeyId !== "all") {
+    await prisma.credential.deleteMany({ where: { id: passkeyId, userId } });
+  } else {
+    await prisma.credential.deleteMany({ where: { userId } });
+  }
+
+  res.json({ ok: true, userId, email: user.email });
+});
+
+/** Send reset / verification email to a user from the admin panel. */
+export const sendUserResetEmail: RequestHandler = asyncHandler(async (req, res) => {
+  const userId = req.params.id as string;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User account not found.");
+
+  const token = randomToken("ve", 18);
+  await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } });
+  await prisma.emailVerificationToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: sha256(token),
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 mins
+    },
+  });
+
+  const verifyLink = `${getAppOrigin()}/verify-email?token=${encodeURIComponent(token)}`;
+  await sendVerificationEmail(user.email, user.name, verifyLink);
+
+  res.json({ ok: true, sentTo: user.email, verifyLink });
+});
+
 /** Look up an account, its live sessions, and recent risky activity (admin recovery view). */
 export const userLookup: RequestHandler = asyncHandler(async (req, res) => {
   const email = (req.query.email as string | undefined)?.trim().toLowerCase();
@@ -78,6 +177,7 @@ export const userLookup: RequestHandler = asyncHandler(async (req, res) => {
   });
   if (!user) throw new AppError(404, "No account uses that email.", { code: "USER_NOT_FOUND" });
 
+  const now = new Date();
   const [sessions, passkeys, recentLogins, recoveryCodes, failedAttempts] = await Promise.all([
     prisma.session.findMany({
       where: { userId: user.id },
@@ -101,7 +201,7 @@ export const userLookup: RequestHandler = asyncHandler(async (req, res) => {
 
   res.json({
     user,
-    stats: { openSessions: sessions.filter((s) => !s.revoked && s.expiresAt > new Date()).length, passkeys: passkeys.length, unusedRecoveryCodes: recoveryCodes, blockedLast7d: failedAttempts },
+    stats: { openSessions: sessions.filter((s) => !s.revoked && s.expiresAt > now).length, passkeys: passkeys.length, unusedRecoveryCodes: recoveryCodes, blockedLast7d: failedAttempts },
     sessions: sessions.map((s) => ({
       id: s.id,
       device: friendlyDevice(s.deviceInfo),
@@ -111,7 +211,7 @@ export const userLookup: RequestHandler = asyncHandler(async (req, res) => {
       revoked: s.revoked,
       createdAt: s.createdAt,
       expiresAt: s.expiresAt,
-      active: !s.revoked && s.expiresAt > new Date(),
+      active: !s.revoked && s.expiresAt > now,
     })),
     passkeys,
     recentLogins: recentLogins.map((l) => ({

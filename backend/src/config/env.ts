@@ -43,3 +43,13 @@ if (!parsed.success) {
 export const env = parsed.data;
 
 export const isProduction = env.NODE_ENV === "production";
+
+/** Clean and return the application origin URL (no quotes, trailing slashes, or missing protocol). */
+export function getAppOrigin(): string {
+  const raw = env.WEBAUTHN_ORIGIN || "http://localhost:5173";
+  let cleaned = raw.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "");
+  if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+    cleaned = `https://${cleaned}`;
+  }
+  return cleaned;
+}

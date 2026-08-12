@@ -1,7 +1,11 @@
 import argon2 from "argon2";
 import jwt from "jsonwebtoken";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { env } from "../config/env.js";
+
+export function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
 
 export interface TokenPayload {
   sub: string; // user id
