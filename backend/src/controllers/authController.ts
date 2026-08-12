@@ -333,7 +333,10 @@ export const verifyEmail: RequestHandler = asyncHandler(async (req, res) => {
 
 export const onboardingStatus: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "Not authenticated.");
-  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId },
+    include: { credentials: true, pccpConfig: true, recoveryCodes: true },
+  });
   if (!user) throw new AppError(404, "User not found.");
   res.json({
     email: user.email,
@@ -342,21 +345,32 @@ export const onboardingStatus: RequestHandler = asyncHandler(async (req, res) =>
     phoneVerified: user.phoneVerified,
     emailVerified: user.emailVerified,
     onboardingStep: user.onboardingStep,
+    passkeysCount: user.credentials.length,
+    pccpEnrolled: user.pccpConfig?.enrolled ?? false,
+    hasRecoveryCodes: user.recoveryCodes.length > 0,
   });
 });
 
 export const onboardingPasskeyOptions: RequestHandler = asyncHandler(async (req, res) => {
-  const user = await requireOnboardingStep(req.userId, "email_pending");
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) throw new AppError(404, "User not found.");
+  if (!user.emailVerified) throw new AppError(403, "Verify your email before continuing.", { code: "EMAIL_UNVERIFIED" });
   const options = await buildRegistrationOptions(user.email, user.name);
   res.json({ options });
 });
 
 export const onboardingPasskeyVerify: RequestHandler = asyncHandler(async (req, res) => {
-  const user = await requireOnboardingStep(req.userId, "email_pending");
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, include: { recoveryCodes: true } });
+  if (!user) throw new AppError(404, "User not found.");
+  if (!user.emailVerified) throw new AppError(403, "Verify your email before continuing.", { code: "EMAIL_UNVERIFIED" });
+
   const { credential, deviceFingerprint, deviceInfo } = registerVerifySchema
     .pick({ credential: true, deviceFingerprint: true, deviceInfo: true })
     .parse(req.body);
   const result = await verifyRegistrationResponseCredential(user.email, credential as unknown as RegistrationResponseJSON);
+
   await prisma.credential.create({
     data: {
       userId: user.id,
@@ -369,6 +383,7 @@ export const onboardingPasskeyVerify: RequestHandler = asyncHandler(async (req, 
       nickname: "Primary Passkey",
     },
   });
+
   const geo = await geoFromIp(getClientIp(req));
   await markDeviceTrusted({
     userId: user.id,
@@ -377,11 +392,24 @@ export const onboardingPasskeyVerify: RequestHandler = asyncHandler(async (req, 
     ipAddress: getClientIp(req),
     location: formatLocation(geo),
   });
-  const { codes, hashes } = await generateRecoveryCodes(10);
-  await prisma.$transaction([
-    prisma.recoveryCode.createMany({ data: hashes.map((codeHash) => ({ userId: user.id, codeHash })) }),
-    prisma.user.update({ where: { id: user.id }, data: { onboardingStep: "passkey_set" } }),
-  ]);
+
+  let codes: string[] = [];
+  if (user.recoveryCodes.length === 0) {
+    const generated = await generateRecoveryCodes(10);
+    codes = generated.codes;
+    await prisma.$transaction([
+      prisma.recoveryCode.createMany({ data: generated.hashes.map((codeHash) => ({ userId: user.id, codeHash })) }),
+      prisma.user.update({ where: { id: user.id }, data: { onboardingStep: "passkey_set" } }),
+    ]);
+  } else {
+    // Already has recovery codes: ensure step is passkey_set
+    await prisma.user.update({ where: { id: user.id }, data: { onboardingStep: "passkey_set" } });
+    const fresh = await generateRecoveryCodes(10);
+    codes = fresh.codes;
+    await prisma.recoveryCode.deleteMany({ where: { userId: user.id } });
+    await prisma.recoveryCode.createMany({ data: fresh.hashes.map((codeHash) => ({ userId: user.id, codeHash })) });
+  }
+
   res.json({ ok: true, recoveryCodes: codes, onboardingStep: "passkey_set" });
 });
 

@@ -321,8 +321,13 @@ export interface OnboardingAwareSession extends Session {
 export interface OnboardingStatus {
   email: string;
   name: string;
+  phone?: string | null;
+  phoneVerified?: boolean;
   emailVerified: boolean;
   onboardingStep: OnboardingStep;
+  passkeysCount?: number;
+  pccpEnrolled?: boolean;
+  hasRecoveryCodes?: boolean;
 }
 
 export async function getOnboardingStatus() {

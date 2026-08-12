@@ -56,6 +56,7 @@ function Onboarding() {
   const [busy, setBusy] = React.useState(false);
   const [recoveryCodes, setRecoveryCodes] = React.useState<string[]>([]);
   const [savedCodes, setSavedCodes] = React.useState(false);
+  const [showPasskeyStep, setShowPasskeyStep] = React.useState(false);
 
   // PCCP inline registration state
   const [pccpCapturing, setPccpCapturing] = React.useState(false);
@@ -69,7 +70,8 @@ function Onboarding() {
 
   const loadStatus = React.useCallback(async () => {
     try {
-      setStatus(await getOnboardingStatus());
+      const res = await getOnboardingStatus();
+      setStatus(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not resume onboarding.");
     }
@@ -100,6 +102,7 @@ function Onboarding() {
       const credential = await startRegistration({ optionsJSON: options });
       const result = await postOnboardingPasskeyVerify({ credential });
       setRecoveryCodes(result.recoveryCodes);
+      setShowPasskeyStep(false);
       toast.success("Passkey created", {
         description: "Your device can now verify your identity.",
       });
@@ -155,12 +158,8 @@ function Onboarding() {
     }
   }
 
-  const step =
-    status?.onboardingStep === "email_pending"
-      ? 1
-      : status?.onboardingStep === "passkey_set"
-        ? 2
-        : 3;
+  const isPasskeyCreated = (status?.passkeysCount ?? 0) > 0 || status?.onboardingStep === "passkey_set" || status?.onboardingStep === "complete";
+  const step = !isPasskeyCreated || showPasskeyStep ? 1 : 2;
 
   if (status?.onboardingStep === "complete") {
     return (
@@ -206,7 +205,7 @@ function Onboarding() {
           eyebrow="Security setup"
           headline="A few taps to lock it down"
           subline="Set a passkey, save your recovery codes, and enroll PCCP click-points."
-          badge={<PillBadge>{status ? `Security setup · ${step} of 2` : "Loading setup"}</PillBadge>}
+          badge={<PillBadge>{status ? `Security setup · Step ${step} of 2` : "Loading setup"}</PillBadge>}
           tips={onboardingTips}
         >
           <Reveal className="w-full max-w-[30rem]">
@@ -223,7 +222,7 @@ function Onboarding() {
                 <div className="flex min-h-44 items-center justify-center gap-3 text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" /> Loading your secure setup…
                 </div>
-              ) : status.onboardingStep === "email_pending" ? (
+              ) : step === 1 ? (
                 <div className="space-y-6 text-center">
                   <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-lime-soft">
                     <Fingerprint className="size-7 text-lime" />
@@ -241,9 +240,19 @@ function Onboarding() {
                     </p>
                   ) : null}
                   <Button size="lg" className="w-full" disabled={busy} onClick={createPasskey}>
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : null}
                     {busy ? "Waiting for your device…" : "Set up biometric passkey"}
                     <KeyRound className="size-4" />
                   </Button>
+                  {isPasskeyCreated ? (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-ink"
+                      onClick={() => setShowPasskeyStep(false)}
+                    >
+                      ← Back to Backup &amp; PCCP Enrollment
+                    </button>
+                  ) : null}
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -276,8 +285,11 @@ function Onboarding() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex min-h-16 items-center justify-center rounded-2xl bg-muted text-xs text-muted-foreground">
-                      Recovery codes saved to your account.
+                    <div className="rounded-2xl border border-hairline bg-card/60 p-4 text-xs text-muted-foreground">
+                      <p className="font-semibold text-ink">Primary Passkey Enrolled</p>
+                      <p className="mt-1">
+                        Your passkey is saved. Click below to proceed with your click-point pattern (PCCP).
+                      </p>
                     </div>
                   )}
 
@@ -289,7 +301,7 @@ function Onboarding() {
                       onChange={(e) => setSavedCodes(e.target.checked)}
                     />
                     <span>
-                      I have saved these recovery codes offline. I understand they are required if I ever lose my device.
+                      I have saved my recovery options offline. I understand they are required if I ever lose my device.
                     </span>
                   </label>
 
@@ -308,6 +320,16 @@ function Onboarding() {
                     {busy ? <Loader2 className="size-4 animate-spin" /> : null}
                     Set Up Click-Point Pattern (PCCP) <MousePointerClick className="size-4" />
                   </Button>
+
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-ink"
+                      onClick={() => setShowPasskeyStep(true)}
+                    >
+                      + Add another passkey
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
