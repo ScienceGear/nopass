@@ -558,6 +558,19 @@ export const loginVerify: RequestHandler = asyncHandler(async (req, res) => {
   const input = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk(input);
 
+  // Passkey-authenticated logins are already strong proof of identity
+  // (phishing-resistant, bound to origin). Downgrade routine step-up signals
+  // (new device/IP) so only security-critical signals (impossible travel,
+  // country change) force an extra gesture.
+  if (assessment.action === "step_up") {
+    const hasSecurityCritical = assessment.signals.some(
+      (s) => s.name === "impossible_travel" || s.name === "country_change",
+    );
+    if (!hasSecurityCritical) {
+      assessment.action = "allow";
+    }
+  }
+
   // Record non-granted attempts here. Successful logins are recorded by
   // completeLogin with the real session id attached.
   if (assessment.action !== "allow") {
