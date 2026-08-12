@@ -28,6 +28,10 @@ const envSchema = z.object({
   TEXTBEE_API_KEY: z.string().default(""),
   TEXTBEE_DEVICE_ID: z.string().default(""),
   TEXTBEE_BASE_URL: z.string().default("https://api.textbee.dev/api/v1"),
+  // Stringee Voice OTP configuration for SMS fallback
+  STRINGEE_API_KEY_SID: z.string().default(""),
+  STRINGEE_API_KEY_SECRET: z.string().default(""),
+  STRINGEE_NUMBER: z.string().default(""),
   ADMIN_EMAILS: z.string().default(""),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   /** Proxy hop count for Express `trust proxy` (default: 1 in production). */
