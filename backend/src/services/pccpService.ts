@@ -27,14 +27,14 @@ import { logger } from "../utils/logger.js";
 export const PCCP_IMAGE_IDS = ["pccp-1", "pccp-2", "pccp-3", "pccp-4", "pccp-5"] as const;
 export const IMAGES_PER_SET = 3; // user sees 3 of 5
 export const GRID_SIZE = 21; // 21x21 quantization grid
-export const TOLERANCE = 1; // Chebyshev distance <=1 (3x3 neighborhood)
-export const MAX_LOCKOUT_FAILURES = 3;
+export const TOLERANCE = 2; // Chebyshev distance <=2 (5x5 neighborhood)
+export const MAX_LOCKOUT_FAILURES = 5;
 export const LOCKOUT_DURATION_MS = 60 * 60 * 1000; // 1 hour
 export const REGISTER_REPETITIONS = 3;
 export const TIMING_ROLLING_WINDOW = 20;
 export const REDIS_TTL_SECONDS = 600; // 10 min per attempt
-export const STEPUP_Z_MAX = 3; // timing z > 3 -> anomaly rejection
-export const STEPUP_Z_MIN = 1.5; // timing z > 1.5 -> require passkey step-up
+export const STEPUP_Z_MAX = 5.0; // timing z > 5.0 -> anomaly rejection
+export const STEPUP_Z_MIN = 3.5; // timing z > 3.5 -> require passkey step-up
 
 export type PccpDeviceClass = "desktop" | "mobile";
 

@@ -1,12 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw, ShieldAlert, Users, MonitorSmartphone, Ban } from "lucide-react";
-import { EmptyState, Panel, RiskBadge } from "@/components/nova/primitives";
+import { Button, EmptyState, Panel, RiskBadge } from "@/components/nova/primitives";
 import { Footer, Navbar, NovaBackground, PageShell } from "@/components/nova/shell";
 import { RequireAuth } from "@/components/nova/RequireAuth";
-import { RiskMap, type RiskPoint } from "@/components/nova/RiskMap";
 import { AdminRecoverPanel } from "@/components/nova/AdminRecover";
-import { getAdminSecurityOverview } from "@/lib/api";
+import { getAdminSecurityOverview, getMe } from "@/lib/api";
 
 const stats = [
   { Icon: Users, label: "Users", key: "users" },
@@ -20,26 +19,42 @@ const POLL_INTERVAL_MS = 30_000;
 export const Route = createFileRoute("/admin")({ component: Admin });
 
 function Admin() {
+  const meQuery = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: getMe,
+    staleTime: 60_000,
+  });
+
   const overview = useQuery({
     queryKey: ["admin-security"],
     queryFn: getAdminSecurityOverview,
     refetchInterval: POLL_INTERVAL_MS,
+    retry: false,
   });
-  const totals = overview.data?.totals;
-  const points: RiskPoint[] =
-    overview.data?.events
-      .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon))
-      .map((e) => ({
-        id: e.id,
-        lat: e.lat!,
-        lon: e.lon!,
-        riskScore: e.riskScore,
-        riskAction: e.riskAction,
-        user: e.user.name,
-        location: e.location,
-        at: e.at,
-      })) ?? [];
 
+  // Non-admin protection: Return 404 Page Not Found error
+  if (overview.isError || (meQuery.isFetched && !meQuery.data?.user?.isAdmin)) {
+    return (
+      <NovaBackground>
+        <PageShell>
+          <Navbar />
+          <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+            <h1 className="font-mono text-6xl font-bold tracking-tight text-ink">404</h1>
+            <h2 className="mt-2 text-xl font-bold">Page Not Found</h2>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+              The page you are looking for does not exist or has been moved.
+            </p>
+            <Button asChild className="mt-6" size="lg">
+              <Link to="/">Return to Home</Link>
+            </Button>
+          </div>
+          <Footer />
+        </PageShell>
+      </NovaBackground>
+    );
+  }
+
+  const totals = overview.data?.totals;
   const lastUpdated = overview.dataUpdatedAt;
   const fresh = lastUpdated ? Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000)) : 0;
 
@@ -76,10 +91,6 @@ function Admin() {
                 </div>
               </Panel>
             ))}
-          </div>
-
-          <div className="mt-4 overflow-hidden rounded-3xl">
-            <RiskMap points={points} />
           </div>
 
           <div className="mt-4">

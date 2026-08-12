@@ -155,7 +155,7 @@ export async function buildAuthenticationOptions(
 ): Promise<PublicKeyCredentialRequestOptionsJSON> {
   const opts = await generateAuthenticationOptions({
     rpID,
-    userVerification: "required",
+    userVerification: "preferred",
     allowCredentials: user.credentials.map((c) => ({
       id: c.id,
       transports: c.transports,
@@ -187,7 +187,7 @@ export async function verifyAuthenticationResponseCredential(
     expectedOrigin: origins,
     expectedRPID: rpID,
     credential,
-    requireUserVerification: true,
+    requireUserVerification: false,
   });
   if (!verified) throw new AppError(400, "WebAuthn authentication failed verification.");
 

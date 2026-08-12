@@ -54,24 +54,7 @@ export function getClientIp(req: Request): string {
   return ip ? normalizeIp(ip) : "unknown";
 }
 
-/** Mask an IP for display (last octet / segment hidden). */
 export function maskIp(ip: string): string {
   if (!ip || ip === "unknown") return "Unknown IP";
-
-  const normalized = normalizeIp(ip);
-  if (normalized.includes(":")) {
-    const parts = normalized.split(":");
-    if (parts.length > 1) {
-      parts[parts.length - 1] = "••••";
-      return parts.join(":");
-    }
-    return "••••••••";
-  }
-
-  const octets = normalized.split(".");
-  if (octets.length === 4) {
-    return `${octets[0]}.${octets[1]}.•••.${octets[3]}`;
-  }
-
-  return "••••••••";
+  return normalizeIp(ip);
 }

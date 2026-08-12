@@ -39,21 +39,8 @@ export function friendlyDeviceName(ua: string): string {
   return `${browser} on ${os}${mobile}`;
 }
 
-/** Show a stable prefix of an IPv4/IPv6 address, hiding the last octet(s). */
 export function maskIp(ip: string | null | undefined): string {
   const raw = ip?.trim();
   if (!raw || raw === "unknown") return "Unknown IP";
-
-  if (raw.includes(":")) {
-    const v6 = raw.split(":");
-    // IPv4-mapped (::ffff:1.2.3.4) or full IPv6
-    if (v6.length >= 2 && /^\d+$/.test(v6[v6.length - 1])) {
-      return `${v6.slice(0, 4).join(":")}:••••`;
-    }
-    return `${v6.slice(0, 3).join(":")}:••••`;
-  }
-
-  const parts = raw.split(".");
-  if (parts.length !== 4) return raw;
-  return `${parts[0]}.${parts[1]}.•••.•••`;
+  return raw;
 }

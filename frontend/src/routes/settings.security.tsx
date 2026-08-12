@@ -130,22 +130,45 @@ function SecuritySettings() {
     }
   }
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [deleteStep, setDeleteStep] = React.useState<"confirm_details" | "enter_otps">("confirm_details");
+  const [deleteEmail, setDeleteEmail] = React.useState("");
+  const [deletePhone, setDeletePhone] = React.useState("");
   const [deleteEmailOtp, setDeleteEmailOtp] = React.useState("");
   const [deletePhoneOtp, setDeletePhoneOtp] = React.useState("");
   const [deleteBusy, setDeleteBusy] = React.useState(false);
   const [deleteMsg, setDeleteMsg] = React.useState<string | null>(null);
 
-  async function openDeletionDialog() {
+  function openDeletionDialog() {
     setDeleteDialogOpen(true);
+    setDeleteStep("confirm_details");
     setDeleteMsg(null);
+    setDeleteEmail(profile.data?.email || "");
+    setDeletePhone(profile.data?.phone || "");
     setDeleteEmailOtp("");
     setDeletePhoneOtp("");
+  }
+
+  async function handleSendDeletionOtps(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deleteEmail.includes("@") || !deletePhone) {
+      setDeleteMsg("Enter your email address and phone number with country code.");
+      return;
+    }
+    setDeleteBusy(true);
+    setDeleteMsg(null);
     try {
-      if (profile.data?.email) {
-        await postPhoneOtpRequest({ phone: profile.data.phone || "", purpose: "verify" });
-      }
-    } catch {
-      /* ignore */
+      await Promise.all([
+        postPhoneOtpRequest({ phone: deletePhone, purpose: "verify", email: deleteEmail }),
+        postPhoneOtpRequest({ phone: deletePhone, purpose: "signup", email: deleteEmail, channel: "sms" }).catch(() => null),
+      ]);
+      toast.success("Verification OTPs sent!", {
+        description: `We delivered 6-digit verification codes to ${deleteEmail} and ${deletePhone}.`,
+      });
+      setDeleteStep("enter_otps");
+    } catch (err) {
+      setDeleteMsg(err instanceof Error ? err.message : "Could not send verification OTPs.");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -610,66 +633,118 @@ function SecuritySettings() {
             <DialogContent className="rounded-3xl sm:max-w-[28rem]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="size-5" /> Confirm Account Deletion
+                  <AlertTriangle className="size-5" /> Request Account Deletion
                 </DialogTitle>
                 <DialogDescription>
-                  To request deletion, enter the 6-digit verification codes sent to your Email and Phone.
-                  Your account will enter a 24-hour grace period before removal.
+                  Permanent deletion requires dual verification. Scheduled deletion has a 24-hour grace period.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 py-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="del-email-otp" className="text-xs font-semibold">
-                    Email 6-Digit OTP
-                  </Label>
-                  <Input
-                    id="del-email-otp"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={deleteEmailOtp}
-                    onChange={(e) => setDeleteEmailOtp(e.target.value.replace(/\D/g, ""))}
-                    placeholder="••••••"
-                    className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
-                  />
+              {deleteStep === "confirm_details" ? (
+                <form onSubmit={handleSendDeletionOtps} className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="del-email-input" className="text-xs font-semibold">
+                      Account Email Address
+                    </Label>
+                    <Input
+                      id="del-email-input"
+                      type="email"
+                      required
+                      value={deleteEmail}
+                      onChange={(e) => setDeleteEmail(e.target.value)}
+                      placeholder="user@example.com"
+                      className="h-11 rounded-2xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="del-phone-input" className="text-xs font-semibold">
+                      Registered Mobile Number
+                    </Label>
+                    <Input
+                      id="del-phone-input"
+                      type="text"
+                      required
+                      value={deletePhone}
+                      onChange={(e) => setDeletePhone(e.target.value)}
+                      placeholder="+919876543210"
+                      className="h-11 rounded-2xl font-mono text-sm"
+                    />
+                  </div>
+
+                  {deleteMsg ? (
+                    <p className="rounded-xl bg-destructive/15 px-3 py-2 text-xs text-destructive">
+                      {deleteMsg}
+                    </p>
+                  ) : null}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" type="button" className="flex-1" onClick={() => setDeleteDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button variant="danger" type="submit" className="flex-1" disabled={deleteBusy}>
+                      {deleteBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Send Verification OTPs
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="del-email-otp" className="text-xs font-semibold flex items-center justify-between">
+                      <span>Email 6-Digit OTP</span>
+                      <span className="text-[0.6875rem] text-muted-foreground">Sent to {deleteEmail}</span>
+                    </Label>
+                    <Input
+                      id="del-email-otp"
+                      autoFocus
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={deleteEmailOtp}
+                      onChange={(e) => setDeleteEmailOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="••••••"
+                      className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="del-phone-otp" className="text-xs font-semibold flex items-center justify-between">
+                      <span>Mobile 6-Digit OTP</span>
+                      <span className="text-[0.6875rem] text-muted-foreground">Sent to {deletePhone}</span>
+                    </Label>
+                    <Input
+                      id="del-phone-otp"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={deletePhoneOtp}
+                      onChange={(e) => setDeletePhoneOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="••••••"
+                      className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
+                    />
+                  </div>
+
+                  {deleteMsg ? (
+                    <p className="rounded-xl bg-destructive/15 px-3 py-2 text-xs text-destructive">
+                      {deleteMsg}
+                    </p>
+                  ) : null}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setDeleteStep("confirm_details")}>
+                      ← Back
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="flex-1"
+                      disabled={deleteBusy}
+                      onClick={handleConfirmAccountDeletion}
+                    >
+                      {deleteBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Confirm Deletion (24h)
+                    </Button>
+                  </div>
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="del-phone-otp" className="text-xs font-semibold">
-                    Mobile 6-Digit OTP
-                  </Label>
-                  <Input
-                    id="del-phone-otp"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={deletePhoneOtp}
-                    onChange={(e) => setDeletePhoneOtp(e.target.value.replace(/\D/g, ""))}
-                    placeholder="••••••"
-                    className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
-                  />
-                </div>
-
-                {deleteMsg ? (
-                  <p className="rounded-xl bg-destructive/15 px-3 py-2 text-xs text-destructive">
-                    {deleteMsg}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="danger"
-                  className="flex-1"
-                  disabled={deleteBusy}
-                  onClick={handleConfirmAccountDeletion}
-                >
-                  {deleteBusy ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Confirm Deletion (24h)
-                </Button>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
 
