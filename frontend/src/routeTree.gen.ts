@@ -27,6 +27,8 @@ import { Route as TransferRouteImport } from './routes/transfer'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as LoginIndexRouteImport } from './routes/login.index'
 import { Route as LoginApproveRouteImport } from './routes/login.approve'
+import { Route as LoginPccpRouteImport } from './routes/login.pccp'
+import { Route as PccpSetupRouteImport } from './routes/pccp.setup'
 import { Route as SettingsSecurityRouteImport } from './routes/settings.security'
 
 const IndexRoute = IndexRouteImport.update({
@@ -119,6 +121,16 @@ const LoginApproveRoute = LoginApproveRouteImport.update({
   path: '/login/approve',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginPccpRoute = LoginPccpRouteImport.update({
+  id: '/login/pccp',
+  path: '/login/pccp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PccpSetupRoute = PccpSetupRouteImport.update({
+  id: '/pccp/setup',
+  path: '/pccp/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
   id: '/settings/security',
   path: '/settings/security',
@@ -143,6 +155,8 @@ export interface FileRoutesByFullPath {
   '/transfer': typeof TransferRoute
   '/verify-email': typeof VerifyEmailRoute
   '/login/approve': typeof LoginApproveRoute
+  '/login/pccp': typeof LoginPccpRoute
+  '/pccp/setup': typeof PccpSetupRoute
   '/settings/security': typeof SettingsSecurityRoute
   '/login/': typeof LoginIndexRoute
 }
@@ -164,6 +178,8 @@ export interface FileRoutesByTo {
   '/transfer': typeof TransferRoute
   '/verify-email': typeof VerifyEmailRoute
   '/login/approve': typeof LoginApproveRoute
+  '/login/pccp': typeof LoginPccpRoute
+  '/pccp/setup': typeof PccpSetupRoute
   '/settings/security': typeof SettingsSecurityRoute
   '/login': typeof LoginIndexRoute
 }
@@ -186,6 +202,8 @@ export interface FileRoutesById {
   '/transfer': typeof TransferRoute
   '/verify-email': typeof VerifyEmailRoute
   '/login/approve': typeof LoginApproveRoute
+  '/login/pccp': typeof LoginPccpRoute
+  '/pccp/setup': typeof PccpSetupRoute
   '/settings/security': typeof SettingsSecurityRoute
   '/login/': typeof LoginIndexRoute
 }
@@ -209,6 +227,8 @@ export interface FileRouteTypes {
     | '/transfer'
     | '/verify-email'
     | '/login/approve'
+    | '/login/pccp'
+    | '/pccp/setup'
     | '/settings/security'
     | '/login/'
   fileRoutesByTo: FileRoutesByTo
@@ -230,6 +250,8 @@ export interface FileRouteTypes {
     | '/transfer'
     | '/verify-email'
     | '/login/approve'
+    | '/login/pccp'
+    | '/pccp/setup'
     | '/settings/security'
     | '/login'
   id:
@@ -251,6 +273,8 @@ export interface FileRouteTypes {
     | '/transfer'
     | '/verify-email'
     | '/login/approve'
+    | '/login/pccp'
+    | '/pccp/setup'
     | '/settings/security'
     | '/login/'
   fileRoutesById: FileRoutesById
@@ -273,6 +297,8 @@ export interface RootRouteChildren {
   TransferRoute: typeof TransferRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   LoginApproveRoute: typeof LoginApproveRoute
+  LoginPccpRoute: typeof LoginPccpRoute
+  PccpSetupRoute: typeof PccpSetupRoute
   SettingsSecurityRoute: typeof SettingsSecurityRoute
   LoginIndexRoute: typeof LoginIndexRoute
 }
@@ -405,6 +431,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginApproveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login/pccp': {
+      id: '/login/pccp'
+      path: '/login/pccp'
+      fullPath: '/login/pccp'
+      preLoaderRoute: typeof LoginPccpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pccp/setup': {
+      id: '/pccp/setup'
+      path: '/pccp/setup'
+      fullPath: '/pccp/setup'
+      preLoaderRoute: typeof PccpSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/security': {
       id: '/settings/security'
       path: '/settings/security'
@@ -433,6 +473,8 @@ const rootRouteChildren: RootRouteChildren = {
   TransferRoute: TransferRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   LoginApproveRoute: LoginApproveRoute,
+  LoginPccpRoute: LoginPccpRoute,
+  PccpSetupRoute: PccpSetupRoute,
   SettingsSecurityRoute: SettingsSecurityRoute,
   LoginIndexRoute: LoginIndexRoute,
 }

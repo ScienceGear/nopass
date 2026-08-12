@@ -101,7 +101,7 @@ async function requireOnboardingStep(userId: string | undefined, expected: Onboa
   return user;
 }
 
-async function completeLogin(
+export async function completeLogin(
   user: { id: string; email: string; name: string; onboardingStep: string; phoneVerified?: boolean },
   ctx: LoginContext,
   riskScore: number,
@@ -167,6 +167,16 @@ async function completeLogin(
       }),
     },
   });
+
+  // Reset PCCP click-point lockout on any successful login (best-effort).
+  prisma.pccpLockout
+    .updateMany({
+      where: { userId: user.id, failedAttempts: { gt: 0 } },
+      data: { failedAttempts: 0, lockedUntil: null },
+    })
+    .catch(() => {
+      /* best-effort */
+    });
 
   return {
     accessToken,

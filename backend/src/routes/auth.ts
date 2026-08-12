@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as auth from "../controllers/authController.js";
-import { requireAuth, optionalAuth } from "../middleware/auth.js";
+import * as pccp from "../controllers/pccpController.js";
+import { requireAuth, requireCompletedOnboarding, optionalAuth } from "../middleware/auth.js";
 import { authLimiter, otpLimiter, phoneOtpLimiter, pollLimiter } from "../middleware/security.js";
 
 const router = Router();
@@ -47,6 +48,13 @@ router.post("/login/qr/exchange", authLimiter, auth.qrExchange);
 
 // Step-up verification
 router.post("/step-up/verify", otpLimiter, auth.stepUpVerify);
+
+// PCCP click-point authentication (setup routes require a completed account)
+router.post("/pccp/register/init", authLimiter, requireAuth, requireCompletedOnboarding, pccp.pccpRegisterInit);
+router.post("/pccp/register/confirm", authLimiter, requireAuth, requireCompletedOnboarding, pccp.pccpRegisterConfirm);
+router.post("/pccp/login/init", authLimiter, pccp.pccpLoginInit);
+router.post("/pccp/login/verify", authLimiter, pccp.pccpLoginVerify);
+router.post("/pccp/stepup/confirm", authLimiter, pccp.pccpStepupConfirm);
 
 // Session management
 router.post("/refresh", authLimiter, auth.refresh);

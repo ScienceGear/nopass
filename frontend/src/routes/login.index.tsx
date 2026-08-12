@@ -33,10 +33,10 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/login/")({
   validateSearch: (search: Record<string, unknown>): { redirect?: string; email?: string } => {
-    return {
-      redirect: typeof search["redirect"] === "string" ? search["redirect"] : undefined,
-      email: typeof search["email"] === "string" ? search["email"] : undefined,
-    };
+    const out: { redirect?: string; email?: string } = {};
+    if (typeof search["redirect"] === "string") out.redirect = search["redirect"];
+    if (typeof search["email"] === "string") out.email = search["email"];
+    return out;
   },
   head: () => ({
     meta: [
@@ -383,6 +383,11 @@ function LoginPage() {
                       label="Recovery code"
                       hint="Use one of the 10 codes you saved at signup."
                       onClick={() => navigate({ to: "/recover" })}
+                    />
+                    <OtherMethod
+                      label="Sign in with click-points"
+                      hint="Click memorable spots on images — no passkey needed."
+                      onClick={() => navigate({ to: "/login/pccp" })}
                     />
                     <OtherMethod
                       label="Sign in on another device"

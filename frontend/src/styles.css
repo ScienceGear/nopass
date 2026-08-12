@@ -251,3 +251,18 @@
   stroke-dashoffset: 40;
   animation: nova-draw 0.5s cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
+
+@keyframes nova-ping-once {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.1);
+    opacity: 0;
+  }
+}
+
+@utility animate-ping-once {
+  animation: nova-ping-once 0.45s ease-out forwards;
+}

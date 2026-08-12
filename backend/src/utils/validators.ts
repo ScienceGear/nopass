@@ -174,3 +174,44 @@ export const notificationPrefsSchema = z.object({
   alertBlockedSignIn: z.boolean().optional(),
   alertProductUpdates: z.boolean().optional(),
 });
+
+// ---------------------------------------------------------------------------
+// PCCP (click-points) schemas
+// ---------------------------------------------------------------------------
+
+const pccpClickWithTimingSchema = z.object({
+  x: z.number().min(0).max(1), // normalized 0..1 — raw pixel coords never accepted
+  y: z.number().min(0).max(1),
+  timeToClick: z.number().min(0),
+  interClick: z.number().min(0),
+  pointerType: z.enum(["mouse", "touch", "stylus"]).optional(),
+});
+
+export const pccpRegisterConfirmSchema = z.object({
+  token: z.string().min(8),
+  clicks: z.array(pccpClickWithTimingSchema).length(3),
+  deviceClass: z.enum(["desktop", "mobile"]),
+});
+
+export const pccpLoginInitSchema = z.object({
+  email: z.string().email(),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+});
+
+export const pccpLoginVerifySchema = z.object({
+  token: z.string().min(8),
+  clicks: z.array(pccpClickWithTimingSchema).length(3),
+  deviceClass: z.enum(["desktop", "mobile"]),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
+});
+
+export const pccpStepupConfirmSchema = z.object({
+  token: z.string().min(8),
+  credential: z.any(),
+  deviceFingerprint: z.string().min(8).max(256),
+  deviceInfo: z.string().min(1).max(512),
+  keystrokes: keystrokeSampleSchema,
+});

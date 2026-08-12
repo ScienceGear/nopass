@@ -33,6 +33,10 @@ name          String
   emailVerificationToken EmailVerificationToken?
   imageChallengeSetups   ImageChallengeSetup[]
   securitySettings       UserSecuritySettings?
+  pccpConfig             PccpConfig?
+  pccpClickpoints        PccpClickpoint[]
+  pccpBaselines          PccpBehaviorBaseline[]
+  pccpLockout            PccpLockout?
 }
 
 model Credential {
@@ -192,4 +196,64 @@ model UserSecuritySettings {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/** PCCP enrollment: the 3 fixed images selected for this user + setup state. */
+model PccpConfig {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  imageIds     String[] // exactly 3 image IDs from the pool of 5, e.g. ["pccp-1","pccp-3","pccp-5"]
+  orderSeed    Int      // seed for the permutation function (deterministic shuffle across attempts)
+  attemptIndex Int      @default(0) // rotated per login attempt so image order changes each time
+  enrolled     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/** Stored click-points: one row per (userId, imageId). Hash prevents raw reconstruction. */
+model PccpClickpoint {
+  id               String   @id @default(uuid())
+  userId           String
+  imageId          String   // "pccp-1" .. "pccp-5"
+  sequencePosition Int      // 0, 1, or 2  index in the user's 3-image set
+  gridCellX        Int      // 0..20 (21x21 grid)
+  gridCellY        Int      // 0..20
+  salt             String   // random salt for this clickpoint
+  hash             String   // argon2id hash of salt + gridCellX + gridCellY + imageId + sequencePosition
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, imageId])
+}
+
+/** Behavioral timing baseline per device class per sequence position. */
+model PccpBehaviorBaseline {
+  id                String   @id @default(uuid())
+  userId            String
+  deviceClass       String   // "desktop" | "mobile"
+  sequencePosition  Int      // 0, 1, 2
+  meanTimeToClick   Float
+  stddevTimeToClick Float
+  meanInterClick    Float
+  stddevInterClick  Float
+  sampleCount       Int      @default(0)
+  recentTimeToClick Float[]  // rolling window, max 20 entries
+  recentInterClick  Float[]  // rolling window, max 20 entries
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceClass, sequencePosition])
+}
+
+/** PCCP-specific lockout (does NOT lock the entire account, only PCCP method). */
+model PccpLockout {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

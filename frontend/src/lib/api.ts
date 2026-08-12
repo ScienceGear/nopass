@@ -768,6 +768,142 @@ export async function postImageChallengeVerify(challengeToken: string, clicks: C
   });
 }
 
+/* ── PCCP click-points ──────────────────────────────────────────────────── */
+
+export interface PccpImage {
+  id: string;
+  url: string;
+}
+
+export type PccpDeviceClass = "desktop" | "mobile";
+
+export interface PccpClickWithTiming {
+  /** Normalized 0..1 — raw pixel coordinates are never accepted by the API. */
+  x: number;
+  y: number;
+  /** ms since this image's reveal finished. */
+  timeToClick: number;
+  /** ms since the previous click (0 for the first). */
+  interClick: number;
+  pointerType?: "mouse" | "touch" | "stylus";
+}
+
+export interface PccpRegisterInitResult {
+  token: string;
+  images: PccpImage[];
+  order: string[];
+  repetition: number;
+  repetitionsRequired: number;
+}
+
+export interface PccpRegisterConfirmResult {
+  ok: boolean;
+  complete?: boolean;
+  repetition?: number;
+  order?: string[];
+  error?: string;
+}
+
+export interface PccpLoginInitResult {
+  token: string;
+  images: PccpImage[];
+  order: string[];
+  status?: "ok" | "locked";
+  lockoutUntil?: string;
+}
+
+export type PccpLoginStatus = "success" | "stepup_required" | "rejected" | "locked";
+
+export interface PccpLoginVerifyResult {
+  status: PccpLoginStatus;
+  accessToken?: string;
+  refreshToken?: string;
+  user?: {
+    name: string;
+    email: string;
+    onboardingStep?: OnboardingStep;
+    onboardingIncomplete?: boolean;
+  };
+  lockoutUntil?: string;
+  attemptsLeft?: number;
+  reason?: string;
+  stepupToken?: string;
+  options?: PublicKeyCredentialRequestOptionsJSON;
+}
+
+export async function postPccpRegisterInit(): Promise<PccpRegisterInitResult> {
+  return apiFetch<PccpRegisterInitResult>("/auth/pccp/register/init", { method: "POST" });
+}
+
+export async function postPccpRegisterConfirm(input: {
+  token: string;
+  clicks: PccpClickWithTiming[];
+  deviceClass: PccpDeviceClass;
+}): Promise<PccpRegisterConfirmResult> {
+  return apiFetch<PccpRegisterConfirmResult>("/auth/pccp/register/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postPccpLoginInit(input: {
+  email: string;
+  deviceFingerprint: string;
+  deviceInfo: string;
+}): Promise<PccpLoginInitResult> {
+  return apiFetch<PccpLoginInitResult>("/auth/pccp/login/init", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postPccpLoginVerify(input: {
+  token: string;
+  clicks: PccpClickWithTiming[];
+  deviceClass: PccpDeviceClass;
+  deviceFingerprint: string;
+  deviceInfo: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}): Promise<PccpLoginVerifyResult> {
+  return apiFetch<PccpLoginVerifyResult>("/auth/pccp/login/verify", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postPccpStepupConfirm(input: {
+  token: string;
+  credential: AuthenticationResponseJSON;
+  deviceFingerprint: string;
+  deviceInfo: string;
+  keystrokes: { prev: number; curr: number; delta: number }[];
+}): Promise<OnboardingAwareSession> {
+  const res = await apiFetch<{
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      name: string;
+      email: string;
+      onboardingStep: OnboardingStep;
+      onboardingIncomplete: boolean;
+    };
+  }>("/auth/pccp/stepup/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  const onboardingIncomplete = res.user?.onboardingIncomplete ?? false;
+  const session = {
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    name: res.user.name,
+    email: res.user.email,
+    onboardingStep: res.user.onboardingStep,
+    onboardingIncomplete,
+  };
+  saveSession({ ...session, onboardingIncomplete });
+  return session;
+}
+
 /* ── QR cross-device login ─────────────────────────────────────────────── */
 
 export async function postQrCreate() {

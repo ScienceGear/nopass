@@ -12,6 +12,9 @@ dist
 .env.local
 backend/.postgres-data/
 
+# Scratch image sources (copied + renamed into frontend/public/pccp/)
+temp-pccp/
+
 # Logs
 *.log
 npm-debug.log*
