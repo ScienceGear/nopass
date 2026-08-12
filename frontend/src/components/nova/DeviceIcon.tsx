@@ -53,17 +53,26 @@ export function DeviceIcon({ kind, className }: Props) {
       );
     case "windows":
       return (
-        <svg viewBox="0 0 24 24" className={glyph} aria-hidden="true">
-          <path fill="#0078D4" d="M3 5.5 10.5 4.3V12H3V5.5Zm0 13V13h7.5v7.7L3 18.5ZM11.5 11.9V4.1L21 2.5v9.4H11.5Zm0 1.2H21v9.3l-9.5-1.6V13.1Z" />
+        <svg viewBox="0 0 24 24" className={glyph} aria-hidden="true" fill="none" stroke="#0078D4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L4 9l2 8 6 5 6-5 2-8-8-7z" fill="#0078D412" stroke="#0078D4" strokeWidth="1.5" />
+          <path d="M12 2v20" stroke="#0078D4" strokeWidth="0.75" strokeDasharray="2 2" />
+          <path d="M4 9h16" stroke="#0078D4" strokeWidth="0.75" strokeDasharray="2 2" />
+          <path d="M12 7L7 11h10L12 7z" fill="#0078D420" stroke="#0078D4" />
+          <path d="M7 11l-2 3 7 5 7-5-2-3H7z" fill="#0078D405" stroke="#0078D4" />
+          <circle cx="10" cy="10" r="0.75" fill="#0078D4" />
+          <circle cx="14" cy="10" r="0.75" fill="#0078D4" />
         </svg>
       );
     case "android":
       return (
-        <svg viewBox="0 0 24 24" className={glyph} aria-hidden="true">
-          <path
-            fill="#3DDC84"
-            d="M17.6 9.5 18.8 7.3a.4.4 0 0 0-.7-.4l-1.3 2.3a6.9 6.9 0 0 0-4.8-1.9 6.9 6.9 0 0 0-4.8 1.9L5.9 6.9a.4.4 0 0 0-.7.4l1.2 2.2A7 7 0 0 0 4 14.5v3.5a1 1 0 0 0 1 1h1.5v2.5a1.5 1.5 0 0 0 3 0v-2.5h5v2.5a1.5 1.5 0 0 0 3 0v-2.5H19a1 1 0 0 0 1-1v-3.5a7 7 0 0 0-2.4-5Z"
-          />
+        <svg viewBox="0 0 24 24" className={glyph} aria-hidden="true" fill="none" stroke="#3DDC84" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L4 9l2 8 6 5 6-5 2-8-8-7z" fill="#3DDC8412" stroke="#3DDC84" strokeWidth="1.5" />
+          <path d="M12 2v20" stroke="#3DDC84" strokeWidth="0.75" strokeDasharray="2 2" />
+          <path d="M4 9h16" stroke="#3DDC84" strokeWidth="0.75" strokeDasharray="2 2" />
+          <path d="M12 7L7 11h10L12 7z" fill="#3DDC8420" stroke="#3DDC84" />
+          <path d="M7 11l-2 3 7 5 7-5-2-3H7z" fill="#3DDC8405" stroke="#3DDC84" />
+          <circle cx="10" cy="10" r="0.75" fill="#3DDC84" />
+          <circle cx="14" cy="10" r="0.75" fill="#3DDC84" />
         </svg>
       );
     case "ios":
@@ -87,13 +96,14 @@ export function DeviceIcon({ kind, className }: Props) {
       );
     case "linux":
       return (
-        <svg viewBox="0 0 24 24" className={glyph} aria-hidden="true">
-          <path
-            fill="#FFD200"
-            d="M12 3c-3.3 0-6 2.4-6 5.4 0 1.1.4 2.1 1 2.9-.6.3-1 .9-1 1.6v1.1c0 .8.5 1.5 1.2 1.8-.2.4-.3.9-.3 1.4 0 1.7 1.3 3 3 3h.4c.3 1.2 1.3 2 2.6 2s2.3-.8 2.6-2h.4c1.7 0 3-1.3 3-3 0-.5-.1-1-.3-1.4.7-.3 1.2-1 1.2-1.8v-1.1c0-.7-.4-1.3-1-1.6.6-.8 1-1.8 1-2.9C18 5.4 15.3 3 12 3Z"
-          />
-          <circle cx="9.8" cy="7.7" r="1" fill="#000" />
-          <circle cx="14.2" cy="7.7" r="1" fill="#000" />
+        <svg viewBox="0 0 24 24" className={glyph} aria-hidden="true" fill="none" stroke="#FFD200" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L4 9l2 8 6 5 6-5 2-8-8-7z" fill="#FFD20012" stroke="#FFD200" strokeWidth="1.5" />
+          <path d="M12 2v20" stroke="#FFD200" strokeWidth="0.75" strokeDasharray="2 2" />
+          <path d="M4 9h16" stroke="#FFD200" strokeWidth="0.75" strokeDasharray="2 2" />
+          <path d="M12 7L7 11h10L12 7z" fill="#FFD20020" stroke="#FFD200" />
+          <path d="M7 11l-2 3 7 5 7-5-2-3H7z" fill="#FFD20005" stroke="#FFD200" />
+          <circle cx="10" cy="10" r="0.75" fill="#FFD200" />
+          <circle cx="14" cy="10" r="0.75" fill="#FFD200" />
         </svg>
       );
     case "chrome":

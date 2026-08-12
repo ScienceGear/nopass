@@ -550,17 +550,19 @@ function SecuritySettings() {
                             used {fmt(device.lastSeen)}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          className="rounded-full px-3 py-1.5 text-[0.8125rem] font-medium text-destructive hover:bg-destructive/10"
-                          onClick={async () => {
-                            await revokeDevice(device.id);
-                            await devices.refetch();
-                            toast.success("Trusted device removed");
-                          }}
-                        >
-                          Remove
-                        </button>
+                        {!device.isCurrent ? (
+                          <button
+                            type="button"
+                            className="rounded-full px-3 py-1.5 text-[0.8125rem] font-medium text-destructive hover:bg-destructive/10"
+                            onClick={async () => {
+                              await revokeDevice(device.id);
+                              await devices.refetch();
+                              toast.success("Trusted device removed");
+                            }}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
                       </div>
                     ))
                   ) : (

@@ -162,7 +162,7 @@ export function ActivityRow({
       </button>
       <div className="flex shrink-0 items-center gap-2 pl-13 sm:pl-0">
         <RiskBadge level={event.risk} />
-        {event.sessionActive && event.sessionId ? (
+        {event.sessionActive && event.sessionId && !event.isCurrent ? (
           <button
             type="button"
             onClick={onRevoke}
@@ -171,6 +171,10 @@ export function ActivityRow({
           >
             {revoking ? "Revoking…" : "Revoke"}
           </button>
+        ) : event.isCurrent ? (
+          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-lime bg-lime-soft/10 px-2 py-1 rounded-md">
+            This Device
+          </span>
         ) : (
           <span className="hidden font-mono text-[0.625rem] uppercase tracking-[0.12em] text-muted-foreground sm:inline">
             ended

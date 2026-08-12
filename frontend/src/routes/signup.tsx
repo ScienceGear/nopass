@@ -1,15 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import {
   ArrowRight,
-  Check,
-  ChevronDown,
   ClipboardCheck,
+  Fingerprint,
   Loader2,
   Mail,
   MailCheck,
-  MousePointerClick,
   PhoneCall,
   ShieldCheck,
   Smartphone,
@@ -17,9 +14,9 @@ import {
   User,
 } from "lucide-react";
 import { Button, PillBadge } from "@/components/nova/primitives";
-import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { PhoneInput } from "@/components/nova/PhoneInput";
-import { Footer, Navbar, NovaBackground, AuthBackground } from "@/components/nova/shell";
+import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
+import { Footer, Navbar, NovaBackground, AuthBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,6 +29,24 @@ import { saveSession } from "@/lib/session";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/signup")({ component: Signup });
+
+const signupTips: AuthTip[] = [
+  {
+    icon: <Fingerprint className="size-4 text-lime" />,
+    title: "Password-Free Authentication",
+    body: "Create and log in to your account without passwords. Authenticate securely with biometrics.",
+  },
+  {
+    icon: <Smartphone className="size-4 text-lime" />,
+    title: "Dual-Factor Verification",
+    body: "Secured by concurrent Email and Mobile SMS OTP verification for complete signup integrity.",
+  },
+  {
+    icon: <ShieldCheck className="size-4 text-lime" />,
+    title: "Anti-Phishing Standard",
+    body: "Built on WebAuthn standards, preventing lookup key interception or spoofing attacks.",
+  },
+];
 
 function Signup() {
   const navigate = useNavigate();
@@ -137,187 +152,184 @@ function Signup() {
   }
 
   return (
-    <NovaBackground>
-      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-        <Navbar variant="marketing" />
-      </div>
+    <AuthBackground>
+      <AuthSplit
+        eyebrow="Onboarding"
+        headline="Create your password-free account."
+        subline="Set up biometrics and secure your banking dashboard in seconds."
+        badge={
+          <PillBadge tone="white" icon={<Sparkles className="size-3.5" />}>
+            NovaBank Enrollment
+          </PillBadge>
+        }
+        tips={signupTips}
+      >
+        <Reveal className="w-full max-w-[26rem]">
+          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-5 text-center shadow-card sm:px-6 sm:py-6">
+            {step === 1 ? (
+              <form onSubmit={startSignup} className="space-y-5 text-left">
+                <div className="space-y-2 text-center">
+                  <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-lime-soft text-ink">
+                    <User className="size-7 text-lime" />
+                  </span>
+                  <h1 className="text-2xl font-bold tracking-tight">Open your account</h1>
+                  <p className="text-sm text-muted-foreground">
+                    No passwords to memorize. We will verify your email and phone via Dual OTP.
+                  </p>
+                </div>
 
-      <main className="flex min-h-[calc(100vh-140px)] items-center justify-center p-4 sm:p-6 lg:p-8">
-        <AuthBackground>
-          <div className="mx-auto flex h-full w-full max-w-xl flex-col justify-center overflow-y-auto px-4 py-8 sm:px-10">
-            <div className="space-y-6 text-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-lime/30 bg-lime-soft px-3 py-1.5 text-xs font-semibold text-ink">
-                <Sparkles className="size-3.5 text-lime" /> Passwordless Security
-              </div>
-
-              {step === 1 ? (
-                <form onSubmit={startSignup} className="space-y-5 text-left">
-                  <div className="space-y-2 text-center">
-                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Open your Nova account</h1>
-                    <p className="text-sm text-muted-foreground">
-                      No passwords to memorize. We will verify your email and phone via Dual OTP.
-                    </p>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signup-name">Full name</Label>
+                    <Input
+                      id="signup-name"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Alex Chen"
+                      className="h-11 rounded-2xl"
+                    />
                   </div>
 
-                  <div className="space-y-4 pt-2">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="signup-name">Full name</Label>
-                      <Input
-                        id="signup-name"
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Alex Chen"
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="signup-email">Email address</Label>
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="alex@company.com"
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label>Mobile number</Label>
-                      <PhoneInput value={phone} onChange={setPhone} />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signup-email">Email address</Label>
+                    <Input
+                      id="signup-email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="alex@company.com"
+                      className="h-11 rounded-2xl"
+                    />
                   </div>
 
-                  {error ? (
-                    <div className="rounded-2xl bg-destructive/10 p-4 text-sm text-destructive">
-                      <p>{error}</p>
-                      {errorCode === "ONBOARDING_INCOMPLETE" ? (
-                        <div className="mt-3 flex gap-2">
-                          <Button size="sm" asChild>
-                            <Link to="/login">Sign in to complete setup</Link>
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signup-phone">Mobile number</Label>
+                    <PhoneInput
+                      value={phone}
+                      onChange={setPhone}
+                      placeholder="98765 43210"
+                    />
+                  </div>
+                </div>
 
-                  <Button type="submit" size="lg" className="w-full" disabled={resending}>
-                    {resending ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {resending ? "Sending verification codes…" : "Continue with Dual OTP"} <ArrowRight className="size-4" />
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleDualOtpVerify} className="space-y-6 text-left">
-                  <div className="space-y-2 text-center">
-                    <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-lime-soft text-ink">
-                      <ShieldCheck className="size-6 text-lime" />
-                    </span>
-                    <h1 className="text-2xl font-bold">Verify Email &amp; Mobile OTP</h1>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      We sent 6-digit codes to <span className="font-medium text-ink">{email}</span> and{" "}
-                      <span className="font-medium text-ink">{phone}</span>.
-                    </p>
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+
+                <Button type="submit" size="lg" className="w-full" disabled={resending}>
+                  {resending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Continue <ArrowRight className="size-4" />
+                </Button>
+
+                <div className="border-t border-hairline pt-4 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    Already have an account?{" "}
+                    <Link to="/login" className="font-semibold text-lime hover:underline">
+                      Sign in here
+                    </Link>
+                  </p>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleDualOtpVerify} className="space-y-5 text-left">
+                <div className="space-y-2 text-center">
+                  <span className="mx-auto grid size-16 place-items-center rounded-[1.25rem] bg-lime-soft text-ink">
+                    <ClipboardCheck className="size-7 text-lime" />
+                  </span>
+                  <h1 className="text-2xl font-bold tracking-tight">Verify both codes</h1>
+                  <p className="text-sm text-muted-foreground">
+                    We sent two separate 6-digit verification codes to verify your identity.
+                  </p>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <Label htmlFor="email-otp-input">Email Verification Code</Label>
+                      <button
+                        type="button"
+                        onClick={resendEmailCode}
+                        className="text-lime hover:underline"
+                        disabled={resending}
+                      >
+                        Resend Code
+                      </button>
+                    </div>
+                    <Input
+                      id="email-otp-input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={emailOtp}
+                      onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="••••••"
+                      className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                    />
                   </div>
 
-                  <div className="space-y-4 rounded-2xl border border-hairline bg-card/60 p-4 sm:p-5">
-                    {/* Email OTP Field */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="email-otp-input" className="flex items-center gap-1.5 text-xs font-semibold">
-                          <Mail className="size-3.5 text-lime" /> Email 6-digit OTP
-                        </Label>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <Label htmlFor="phone-otp-input">Mobile Verification Code</Label>
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={resendEmailCode}
-                          disabled={resending}
-                          className="text-[0.6875rem] font-medium text-muted-foreground hover:text-ink"
+                          onClick={() => sendPhoneCode("sms")}
+                          className="text-lime hover:underline"
                         >
-                          {resending ? "Sending…" : "Resend Email Code"}
+                          Resend SMS
+                        </button>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          onClick={() => sendPhoneCode("voice")}
+                          className="flex items-center gap-1 font-semibold text-lime hover:underline"
+                        >
+                          <PhoneCall className="size-3" /> Call me
                         </button>
                       </div>
-                      <Input
-                        id="email-otp-input"
-                        autoFocus
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={emailOtp}
-                        onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
-                        placeholder="••••••"
-                        className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
-                      />
                     </div>
-
-                    <div className="hairline-y" />
-
-                    {/* Phone OTP Field */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="phone-otp-input" className="flex items-center gap-1.5 text-xs font-semibold">
-                          <Smartphone className="size-3.5 text-lime" /> Mobile 6-digit OTP
-                        </Label>
-                        <div className="flex gap-2 text-[0.6875rem]">
-                          <button
-                            type="button"
-                            onClick={() => sendPhoneCode("sms")}
-                            className="font-medium text-muted-foreground hover:text-ink"
-                          >
-                            Resend SMS
-                          </button>
-                          <span>·</span>
-                          <button
-                            type="button"
-                            onClick={() => sendPhoneCode("voice")}
-                            className="flex items-center gap-1 font-bold text-ink hover:underline"
-                          >
-                            <PhoneCall className="size-3 text-lime" /> Call me
-                          </button>
-                        </div>
-                      </div>
-                      <Input
-                        id="phone-otp-input"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={phoneOtp}
-                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
-                        placeholder="••••••"
-                        className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
-                      />
-                    </div>
+                    <Input
+                      id="phone-otp-input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={phoneOtp}
+                      onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="••••••"
+                      className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                    />
                   </div>
+                </div>
 
-                  {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                  ) : null}
+                {error ? (
+                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
 
-                  <Button type="submit" size="lg" className="w-full" disabled={phoneBusy}>
-                    {phoneBusy ? <Loader2 className="size-4 animate-spin" /> : null}
-                    Verify Both Codes &amp; Proceed <ArrowRight className="size-4" />
-                  </Button>
+                <Button type="submit" size="lg" className="w-full" disabled={phoneBusy}>
+                  {phoneBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Verify Both Codes &amp; Proceed <ArrowRight className="size-4" />
+                </Button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep(1);
-                      setError(null);
-                    }}
-                    className="w-full text-center text-xs font-medium text-muted-foreground hover:text-ink"
-                  >
-                    ← Change name or phone number
-                  </button>
-                </form>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1);
+                    setError(null);
+                  }}
+                  className="w-full text-center text-xs font-medium text-muted-foreground hover:text-ink"
+                >
+                  ← Change name or phone number
+                </button>
+              </form>
+            )}
           </div>
-        </AuthBackground>
-      </main>
-
-      <Footer />
-    </NovaBackground>
+        </Reveal>
+      </AuthSplit>
+    </AuthBackground>
   );
 }

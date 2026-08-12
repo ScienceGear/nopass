@@ -56,7 +56,7 @@ export function NovaBackground({ children }: { children: React.ReactNode }) {
  * rounded inner panel so the auth card reads as a framed "page in page". */
 export function AuthBackground({ children }: { children: React.ReactNode }) {
   return (
-    <div className="nova-field nova-grain h-dvh w-full overflow-hidden p-3 sm:p-6 lg:p-8">{children}</div>
+    <div className="nova-field nova-grain min-h-screen w-full overflow-y-auto p-3 sm:p-6 lg:p-8">{children}</div>
   );
 }
 
