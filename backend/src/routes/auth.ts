@@ -20,6 +20,7 @@ router.post("/onboarding/passkey/options", authLimiter, requireAuth, auth.onboar
 router.post("/onboarding/passkey/verify", authLimiter, requireAuth, auth.onboardingPasskeyVerify);
 router.get("/onboarding/image-challenge/pool", requireAuth, auth.onboardingImagePool);
 router.post("/onboarding/image-challenge/setup", authLimiter, requireAuth, auth.onboardingImageSetup);
+router.post("/onboarding/complete", requireAuth, auth.onboardingComplete);
 
 // Authentication
 router.post("/login/options", authLimiter, auth.loginOptions);

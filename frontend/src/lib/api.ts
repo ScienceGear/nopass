@@ -356,6 +356,12 @@ export async function postOnboardingPasskeyVerify(input: { credential: Registrat
   );
 }
 
+export async function postOnboardingComplete() {
+  return apiFetch<{ ok: boolean; onboardingStep: OnboardingStep }>("/auth/onboarding/complete", {
+    method: "POST",
+  });
+}
+
 export interface ImageSetupScene {
   key: string;
   name: string;

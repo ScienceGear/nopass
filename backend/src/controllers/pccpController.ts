@@ -171,10 +171,13 @@ export const pccpRegisterConfirm: RequestHandler = asyncHandler(async (req, res)
   }
 
   // All repetitions done: seed the per-device-class timing baseline and flip
-  // the enrollment to complete.
+  // the enrollment & onboarding step to complete.
   const deviceClass: PccpDeviceClass = body.deviceClass;
   await appendTimingSample(userId, deviceClass, [...state.timingSamples, ...samples]);
-  await prisma.pccpConfig.update({ where: { userId }, data: { enrolled: true } });
+  await prisma.$transaction([
+    prisma.pccpConfig.update({ where: { userId }, data: { enrolled: true } }),
+    prisma.user.update({ where: { id: userId }, data: { onboardingStep: "complete" } }),
+  ]);
   await deleteRegState(body.token);
 
   res.json({ ok: true, complete: true });

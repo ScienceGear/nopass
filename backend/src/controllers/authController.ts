@@ -438,6 +438,12 @@ export const onboardingImageSetup: RequestHandler = asyncHandler(async (req, res
   res.json({ ok: true, onboardingStep: "complete" });
 });
 
+export const onboardingComplete: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  await prisma.user.update({ where: { id: req.userId }, data: { onboardingStep: "complete" } });
+  res.json({ ok: true, onboardingStep: "complete" });
+});
+
 export const registerStatus: RequestHandler = asyncHandler(async (req, res) => {
   const { email } = registerStatusSchema.parse(req.body);
   const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });

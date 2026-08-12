@@ -3,6 +3,7 @@ import * as React from "react";
 import { startRegistration, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import {
   Check,
+  CheckCircle2,
   Fingerprint,
   KeyRound,
   Loader2,
@@ -20,6 +21,7 @@ import {
   postOnboardingPasskeyVerify,
   postPccpRegisterInit,
   postPccpRegisterConfirm,
+  postOnboardingComplete,
   type OnboardingStatus,
   type PccpClickWithTiming,
   type PccpImage,
@@ -72,6 +74,9 @@ function Onboarding() {
     try {
       const res = await getOnboardingStatus();
       setStatus(res);
+      if (res.onboardingStep === "complete") {
+        setOnboardingIncomplete(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not resume onboarding.");
     }
@@ -85,10 +90,6 @@ function Onboarding() {
     }
     void loadStatus();
   }, [ready, session, navigate, loadStatus]);
-
-  React.useEffect(() => {
-    if (status?.onboardingStep === "complete") setOnboardingIncomplete(false);
-  }, [status?.onboardingStep]);
 
   async function createPasskey() {
     if (!browserSupportsWebAuthn()) {
@@ -143,8 +144,10 @@ function Onboarding() {
       });
       if (res.complete) {
         setPccpCapturing(false);
-        await loadStatus();
         toast.success("PCCP Setup Complete!", { description: "Your click-point pattern is enrolled." });
+        await postOnboardingComplete().catch(() => null);
+        setOnboardingIncomplete(false);
+        await loadStatus();
         return;
       }
       if (res.repetition && res.order) {
@@ -158,7 +161,22 @@ function Onboarding() {
     }
   }
 
+  async function finishOnboarding() {
+    setBusy(true);
+    try {
+      await postOnboardingComplete().catch(() => null);
+      setOnboardingIncomplete(false);
+      toast.success("Welcome to NovaBank!");
+      void navigate({ to: "/dashboard" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not finalize onboarding.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const isPasskeyCreated = (status?.passkeysCount ?? 0) > 0 || status?.onboardingStep === "passkey_set" || status?.onboardingStep === "complete";
+  const isPccpDone = status?.pccpEnrolled || status?.onboardingStep === "complete";
   const step = !isPasskeyCreated || showPasskeyStep ? 1 : 2;
 
   if (status?.onboardingStep === "complete") {
@@ -293,11 +311,18 @@ function Onboarding() {
                     </div>
                   )}
 
+                  {isPccpDone ? (
+                    <div className="flex items-center gap-3 rounded-2xl bg-lime/15 p-4 text-xs text-ink font-semibold">
+                      <CheckCircle2 className="size-5 shrink-0 text-lime" />
+                      <span>PCCP Click-Point Pattern Enrolled Successfully!</span>
+                    </div>
+                  ) : null}
+
                   <label className="flex items-start gap-3 rounded-2xl border p-4 text-sm">
                     <input
                       type="checkbox"
                       className="mt-0.5 size-4"
-                      checked={savedCodes}
+                      checked={savedCodes || isPccpDone}
                       onChange={(e) => setSavedCodes(e.target.checked)}
                     />
                     <span>
@@ -311,15 +336,27 @@ function Onboarding() {
                     </p>
                   ) : null}
 
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    disabled={!savedCodes || busy}
-                    onClick={startPccpSetup}
-                  >
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-                    Set Up Click-Point Pattern (PCCP) <MousePointerClick className="size-4" />
-                  </Button>
+                  {isPccpDone ? (
+                    <Button
+                      size="lg"
+                      className="w-full bg-lime text-ink hover:bg-lime/90 font-bold"
+                      disabled={busy}
+                      onClick={finishOnboarding}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Complete Account Setup &amp; Launch Dashboard <Check className="size-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      disabled={!savedCodes || busy}
+                      onClick={startPccpSetup}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Set Up Click-Point Pattern (PCCP) <MousePointerClick className="size-4" />
+                    </Button>
+                  )}
 
                   <div className="pt-2 text-center">
                     <button
