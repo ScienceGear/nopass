@@ -19,171 +19,66 @@ import {
 import { Button, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { PhoneInput } from "@/components/nova/PhoneInput";
-import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
-import { AuthBackground, Reveal } from "@/components/nova/shell";
+import { Footer, Navbar, NovaBackground, AuthBackground } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  postPhoneOtpRequest,
-  postPhoneOtpVerify,
-  postRegisterInitiate,
-  postRegisterOptions,
-  postRegisterStatus,
-  postRegisterVerify,
   ApiError,
+  postPhoneOtpRequest,
+  postRegisterInitiate,
+  postVerifyDualOtp,
 } from "@/lib/api";
-import { useKeystrokeCapture } from "@/lib/keystroke";
-import { downloadRecoveryCodesPdf } from "@/lib/recoveryPdf";
-import { useSession } from "@/lib/session";
+import { saveSession } from "@/lib/session";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/signup")({
-  head: () => ({
-    meta: [
-      { title: "Open a NovaBank account  no password needed" },
-      {
-        name: "description",
-        content:
-          "Two fields and one Face ID scan. Your passkey is created on your device, never on our servers.",
-      },
-      { property: "og:title", content: "Open a NovaBank account" },
-      {
-        property: "og:description",
-        content: "Two fields and one Face ID scan. No password, ever.",
-      },
-    ],
-  }),
-  component: Signup,
-});
-
-type Step = 1 | 2 | 3 | 4;
-
-const signupTips: AuthTip[] = [
-  {
-    icon: <Sparkles className="size-4" />,
-    title: "Two fields, one scan",
-    body: "Name, email and a passkey  that's the whole signup.",
-  },
-  {
-    icon: <ShieldCheck className="size-4" />,
-    title: "Private by design",
-    body: "Your private key never leaves your device's secure chip.",
-  },
-  {
-    icon: <ClipboardCheck className="size-4" />,
-    title: "Recovery you control",
-    body: "10 offline codes are the only backup you'll ever need.",
-  },
-  {
-    icon: <MousePointerClick className="size-4" />,
-    title: "Optional click-points",
-    body: "After signup, set memorable image spots in Security settings for passwordless backup sign-in.",
-  },
-];
+export const Route = createFileRoute("/signup")({ component: Signup });
 
 function Signup() {
   const navigate = useNavigate();
-  const { session } = useSession();
-  const [step, setStep] = React.useState<Step>(1);
+  const [step, setStep] = React.useState<1 | 2>(1);
+
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [phase, setPhase] = React.useState<PasskeyPhase>("idle");
+  const [phone, setPhone] = React.useState("+91");
+
+  const [emailOtp, setEmailOtp] = React.useState("");
+  const [phoneOtp, setPhoneOtp] = React.useState("");
+
   const [error, setError] = React.useState<string | null>(null);
   const [errorCode, setErrorCode] = React.useState<string | null>(null);
-  const [why, setWhy] = React.useState(false);
-  const [recoveryCodes, setRecoveryCodes] = React.useState<string[]>([]);
-  const [resending, setResending] = React.useState(false);
-  const keys = useKeystrokeCapture();
-  const [emailVerified, setEmailVerified] = React.useState(false);
-  const [phoneSent, setPhoneSent] = React.useState(false);
-  const [phoneVerified, setPhoneVerified] = React.useState(false);
-  const [phoneOtp, setPhoneOtp] = React.useState("");
-  const [phoneBusy, setPhoneBusy] = React.useState(false);
   const [phoneError, setPhoneError] = React.useState<string | null>(null);
+
+  const [resending, setResending] = React.useState(false);
+  const [phoneBusy, setPhoneBusy] = React.useState(false);
+
   const phoneCodeSentRef = React.useRef(false);
-
-  React.useEffect(() => {
-    if (session && step !== 4) {
-      if (session.onboardingIncomplete) navigate({ to: "/onboarding" });
-      else navigate({ to: "/dashboard" });
-    }
-  }, [session, navigate, step]);
-
-  // Poll verification status while on the "check your inbox" step. Stop as soon
-  // as the email is verified; the navigation effect below takes over.
-  React.useEffect(() => {
-    if (step !== 2 || emailVerified) return;
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const status = await postRegisterStatus(email);
-        if (!cancelled && status.verified) setEmailVerified(true);
-      } catch {
-        /* transient  keep polling */
-      }
-    };
-    const timer = setInterval(check, 3000);
-    check();
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [step, email, emailVerified]);
-
-  // Once both the email and phone are verified, continue to onboarding. This
-  // covers the case where either verification lands last.
-  React.useEffect(() => {
-    if (step !== 2 || !emailVerified || !phoneVerified) return;
-    toast.success("Email verified", {
-      description: "Continue with your secure account setup.",
-    });
-    void navigate({ to: "/onboarding" });
-  }, [step, emailVerified, phoneVerified, navigate]);
-
-  // Auto-send the phone verification code once the signup row exists.
-  React.useEffect(() => {
-    if (step !== 2 || phoneCodeSentRef.current) return;
-    if (phoneVerified) return;
-    phoneCodeSentRef.current = true;
-    void sendPhoneCode();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, phoneVerified]);
 
   async function sendPhoneCode(channel: "sms" | "voice" = "sms") {
     setPhoneError(null);
     try {
       await postPhoneOtpRequest({ phone, purpose: "signup", email, channel });
-      setPhoneSent(true);
       if (channel === "voice") {
         toast.success("Calling your phone…", {
           description: `Triggered voice call to ${phone} with your 6-digit code.`,
         });
       } else {
-        toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+        toast.success("SMS code sent", { description: `We texted a 6-digit code to ${phone}.` });
       }
     } catch (err) {
       setPhoneError(err instanceof Error ? err.message : "Could not send the code.");
     }
   }
 
-  async function confirmPhone(e: React.FormEvent) {
-    e.preventDefault();
-    if (!/^\d{6}$/.test(phoneOtp)) {
-      setPhoneError("Enter the 6-digit code from your phone.");
-      return;
-    }
-    setPhoneBusy(true);
-    setPhoneError(null);
+  async function resendEmailCode() {
+    setResending(true);
+    setError(null);
     try {
-      await postPhoneOtpVerify({ phone, code: phoneOtp, purpose: "signup", email });
-      setPhoneVerified(true);
-      setPhoneOtp("");
-      toast.success("Phone verified", { description: "Your mobile number is confirmed." });
+      await postRegisterInitiate({ name, email, phone });
+      toast.success("Codes re-sent", { description: `Sent fresh codes to ${email} and ${phone}.` });
     } catch (err) {
-      setPhoneError(err instanceof Error ? err.message : "That code didn't match.");
+      setError(err instanceof Error ? err.message : "Could not re-send verification codes.");
     } finally {
-      setPhoneBusy(false);
+      setResending(false);
     }
   }
 
@@ -196,213 +91,194 @@ function Signup() {
     setError(null);
     setResending(true);
     try {
-      await postRegisterInitiate({ name, email, phone });
+      const res = await postRegisterInitiate({ name, email, phone });
+      if (res.devEmailOtp || res.devPhoneOtp) {
+        toast.info("Dev Codes Surfaced", {
+          description: `Email OTP: ${res.devEmailOtp || "Sent"} | Phone OTP: ${res.devPhoneOtp || "Sent"}`,
+        });
+      }
       setStep(2);
     } catch (err) {
-      const apiErr = err as { code?: string };
-      setErrorCode(apiErr?.code || null);
+      if (err instanceof ApiError) {
+        setErrorCode(err.code || null);
+      } else {
+        setErrorCode(null);
+      }
       setError(err instanceof Error ? err.message : "Could not start signup.");
     } finally {
       setResending(false);
     }
   }
 
-  async function resendEmail() {
-    setError(null);
-    setResending(true);
-    try {
-      await postRegisterInitiate({ name, email, phone });
-      toast.success("Email sent", { description: `A fresh link is on its way to ${email}.` });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send the email.");
-    } finally {
-      setResending(false);
+  async function handleDualOtpVerify(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(emailOtp) || !/^\d{6}$/.test(phoneOtp)) {
+      setError("Enter 6-digit verification codes for both Email and Mobile.");
+      return;
     }
-  }
-
-  async function createPasskey() {
-    setPhase("waiting");
     setError(null);
+    setPhoneBusy(true);
     try {
-      if (!browserSupportsWebAuthn()) {
-        setError("This browser doesn't support passkeys yet. Try Chrome, Edge or Safari.");
-        setPhase("idle");
-        return;
-      }
-      const options = await postRegisterOptions({ name, email });
-      keys.getSamples();
-      const credential = await startRegistration({ optionsJSON: options });
-      const res = await postRegisterVerify({ name, email, credential });
-      setPhase("success");
-      setRecoveryCodes(res.recoveryCodes);
-      setStep(4);
-      toast.success("Passkey created", {
-        description: `${name.split(" ")[0]}, your account is live.`,
+      const res = await postVerifyDualOtp({ email, emailOtp, phoneOtp });
+      saveSession({
+        accessToken: res.token,
+        refreshToken: res.refreshToken,
+        name: res.user.name,
+        email: res.user.email,
+        onboardingIncomplete: res.user.onboardingStep !== "complete",
       });
+      toast.success("Identity verified!", { description: "Proceeding to secure account setup." });
+      void navigate({ to: "/onboarding" });
     } catch (err) {
-      setPhase("error");
-      setError(
-        err instanceof Error ? err.message : "Your device cancelled the request. Try again.",
-      );
+      setError(err instanceof Error ? err.message : "Invalid or expired verification codes.");
+    } finally {
+      setPhoneBusy(false);
     }
   }
-
-  const progressTotal = step === 4 ? 4 : 3;
 
   return (
-    <AuthBackground>
-      <AuthSplit
-        eyebrow="No password required"
-        headline="Two fields. One scan. You're in."
-        subline="We only need a name and an email. Your passkey is created on your device  never on our servers."
-        badge={
-          <span className="eyebrow">
-            Step {Math.min(step, 3)} of {progressTotal === 4 ? "4" : "3"}
-          </span>
-        }
-        tips={signupTips}
-      >
-        <Reveal className="w-full max-w-[30rem]">
-          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-6 shadow-card sm:p-8">
-            {/* progress hairline */}
-            <div className="mb-7 flex gap-1.5">
-              {[1, 2, 3, 4].map((s) => (
-                <span
-                  key={s}
-                  className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                    step >= s ? "bg-lime" : "bg-muted"
-                  }`}
-                />
-              ))}
-            </div>
+    <NovaBackground>
+      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <Navbar variant="marketing" />
+      </div>
 
-            {step === 1 ? (
-              <form onSubmit={startSignup} className="space-y-5">
-                <div className="space-y-2">
-                  <PillBadge icon={<ShieldCheck />}>No password required</PillBadge>
-                  <h1 className="pt-2 text-2xl">Open your account</h1>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    We only need a name and an email. We&apos;ll email you a link to prove the
-                    address is yours, then we guide you through backup access, a passkey, and an
-                    account image sequence.
-                  </p>
-                </div>
+      <main className="flex min-h-[calc(100vh-140px)] items-center justify-center p-4 sm:p-6 lg:p-8">
+        <AuthBackground>
+          <div className="mx-auto flex h-full w-full max-w-xl flex-col justify-center overflow-y-auto px-4 py-8 sm:px-10">
+            <div className="space-y-6 text-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-lime/30 bg-lime-soft px-3 py-1.5 text-xs font-semibold text-ink">
+                <Sparkles className="size-3.5 text-lime" /> Passwordless Security
+              </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full name</Label>
-                    <div className="relative">
-                      <User className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              {step === 1 ? (
+                <form onSubmit={startSignup} className="space-y-5 text-left">
+                  <div className="space-y-2 text-center">
+                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Open your Nova account</h1>
+                    <p className="text-sm text-muted-foreground">
+                      No passwords to memorize. We will verify your email and phone via Dual OTP.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="signup-name">Full name</Label>
                       <Input
-                        id="name"
+                        id="signup-name"
+                        type="text"
+                        required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="h-12 rounded-2xl pl-10"
-                        placeholder="Your Name"
+                        placeholder="Alex Chen"
+                        className="h-11 rounded-2xl"
                       />
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="signup-email">Email address</Label>
                       <Input
-                        id="email"
+                        id="signup-email"
                         type="email"
+                        required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        onKeyDown={keys.onKeyDown}
-                        className="h-12 rounded-2xl pl-10"
-                        placeholder="you@email.com"
+                        placeholder="alex@company.com"
+                        className="h-11 rounded-2xl"
                       />
                     </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Mobile number</Label>
+                      <PhoneInput value={phone} onChange={setPhone} />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Mobile number</Label>
-                    <PhoneInput id="phone" value={phone} onChange={setPhone} autoComplete="tel" />
-                    <p className="text-xs text-muted-foreground">
-                      We&apos;ll text a verification code to this number after you continue.
-                    </p>
-                  </div>
-                </div>
 
-                {error ? (
-                  <div className="space-y-3">
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
-                    {errorCode === "ONBOARDING_INCOMPLETE" && (
-                      <Button variant="outline" className="w-full bg-background" asChild>
-                        <Link to="/login" search={{ email }}>Sign in instead →</Link>
-                      </Button>
-                    )}
-                  </div>
-                ) : null}
+                  {error ? (
+                    <div className="rounded-2xl bg-destructive/10 p-4 text-sm text-destructive">
+                      <p>{error}</p>
+                      {errorCode === "ONBOARDING_INCOMPLETE" ? (
+                        <div className="mt-3 flex gap-2">
+                          <Button size="sm" asChild>
+                            <Link to="/login">Sign in to complete setup</Link>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                <Button type="submit" size="lg" className="w-full" disabled={resending}>
-                  {resending ? "Sending…" : "Continue"} <ArrowRight className="size-4" />
-                </Button>
-              </form>
-            ) : step === 2 ? (
-              <div className="space-y-6 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-warning/14 text-[oklch(0.58_0.13_70)]">
-                  <MailCheck className="size-7" />
-                </span>
-                <div className="space-y-2">
-                  <h1 className="text-2xl">Check your inbox</h1>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    We sent a verification link to{" "}
-                    <span className="font-medium text-ink">{email}</span> and a code to{" "}
-                    <span className="font-medium text-ink">{phone}</span>. It expires in 15
-                    minutes  we&apos;ll carry on automatically once both are confirmed.
-                  </p>
-                </div>
-
-                <div
-                  className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm ${
-                    emailVerified
-                      ? "bg-success/14 text-primary"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {emailVerified ? <Check className="size-4" /> : <Loader2 className="size-4 animate-spin" />}
-                  {emailVerified ? "Email verified" : "Waiting for you to verify your email…"}
-                </div>
-
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="w-full"
-                  disabled={resending}
-                  onClick={resendEmail}
-                >
-                  {resending ? "Sending…" : "Re-send the email"}
-                </Button>
-
-                <div className="hairline-y" />
-
-                <div className="space-y-4 text-left">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lime-soft">
-                      <Smartphone className="size-[1.05rem]" />
+                  <Button type="submit" size="lg" className="w-full" disabled={resending}>
+                    {resending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {resending ? "Sending verification codes…" : "Continue with Dual OTP"} <ArrowRight className="size-4" />
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleDualOtpVerify} className="space-y-6 text-left">
+                  <div className="space-y-2 text-center">
+                    <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-lime-soft text-ink">
+                      <ShieldCheck className="size-6 text-lime" />
                     </span>
-                    <div>
-                      <p className="text-sm font-semibold">Verify your mobile number</p>
-                      <p className="text-xs text-muted-foreground">
-                        {phoneVerified
-                          ? "Your number is confirmed."
-                          : `A 6-digit code was texted to ${phone}.`}
-                      </p>
-                    </div>
+                    <h1 className="text-2xl font-bold">Verify Email &amp; Mobile OTP</h1>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      We sent 6-digit codes to <span className="font-medium text-ink">{email}</span> and{" "}
+                      <span className="font-medium text-ink">{phone}</span>.
+                    </p>
                   </div>
-                  {phoneVerified ? (
-                    <div className="flex items-center justify-center gap-2 rounded-2xl bg-success/14 px-4 py-3 text-sm text-primary">
-                      <Check className="size-4" /> Phone verified
-                    </div>
-                  ) : (
-                    <form onSubmit={confirmPhone} className="flex gap-2">
+
+                  <div className="space-y-4 rounded-2xl border border-hairline bg-card/60 p-4 sm:p-5">
+                    {/* Email OTP Field */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="email-otp-input" className="flex items-center gap-1.5 text-xs font-semibold">
+                          <Mail className="size-3.5 text-lime" /> Email 6-digit OTP
+                        </Label>
+                        <button
+                          type="button"
+                          onClick={resendEmailCode}
+                          disabled={resending}
+                          className="text-[0.6875rem] font-medium text-muted-foreground hover:text-ink"
+                        >
+                          {resending ? "Sending…" : "Resend Email Code"}
+                        </button>
+                      </div>
                       <Input
+                        id="email-otp-input"
                         autoFocus
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={emailOtp}
+                        onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                        placeholder="••••••"
+                        className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      />
+                    </div>
+
+                    <div className="hairline-y" />
+
+                    {/* Phone OTP Field */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="phone-otp-input" className="flex items-center gap-1.5 text-xs font-semibold">
+                          <Smartphone className="size-3.5 text-lime" /> Mobile 6-digit OTP
+                        </Label>
+                        <div className="flex gap-2 text-[0.6875rem]">
+                          <button
+                            type="button"
+                            onClick={() => sendPhoneCode("sms")}
+                            className="font-medium text-muted-foreground hover:text-ink"
+                          >
+                            Resend SMS
+                          </button>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            onClick={() => sendPhoneCode("voice")}
+                            className="flex items-center gap-1 font-bold text-ink hover:underline"
+                          >
+                            <PhoneCall className="size-3 text-lime" /> Call me
+                          </button>
+                        </div>
+                      </div>
+                      <Input
+                        id="phone-otp-input"
                         inputMode="numeric"
                         maxLength={6}
                         value={phoneOtp}
@@ -410,160 +286,38 @@ function Signup() {
                         placeholder="••••••"
                         className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
                       />
-                      <Button type="submit" size="md" className="shrink-0" disabled={phoneBusy}>
-                        {phoneBusy ? "…" : "Verify"}
-                      </Button>
-                    </form>
-                  )}
-                  {phoneError ? (
+                    </div>
+                  </div>
+
+                  {error ? (
                     <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {phoneError}
+                      {error}
                     </p>
                   ) : null}
-                  {!phoneVerified ? (
-                    <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-xs text-muted-foreground">
-                      <button
-                        type="button"
-                        onClick={() => sendPhoneCode("sms")}
-                        className="font-medium transition-colors hover:text-ink"
-                      >
-                        Re-send SMS
-                      </button>
-                      <span>·</span>
-                      <button
-                        type="button"
-                        onClick={() => sendPhoneCode("voice")}
-                        className="flex items-center gap-1.5 font-bold text-ink hover:underline"
-                      >
-                        <PhoneCall className="size-3.5 text-lime" /> Call me instead
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep(1);
-                    setError(null);
-                  }}
-                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                >
-                  ← Use a different email
-                </button>
-              </div>
-            ) : step === 3 ? (
-              <div className="space-y-6 text-center">
-                <div className="flex justify-center">
-                  <PasskeyGlyph phase={phase} />
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-2xl">Create your passkey</h1>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    Your device generates a key pair and keeps the private half in its secure chip.
-                    We only ever see the public half.
-                  </p>
-                </div>
+                  <Button type="submit" size="lg" className="w-full" disabled={phoneBusy}>
+                    {phoneBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Verify Both Codes &amp; Proceed <ArrowRight className="size-4" />
+                  </Button>
 
-                {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    {error}
-                  </p>
-                ) : null}
-
-                <Button
-                  size="lg"
-                  className="w-full"
-                  disabled={phase === "waiting"}
-                  onClick={createPasskey}
-                >
-                  {phase === "waiting"
-                    ? "Waiting for your device…"
-                    : "Continue with Face ID / Touch ID"}
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep(2);
-                    setError(null);
-                    setPhase("idle");
-                  }}
-                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                >
-                  ← Back
-                </button>
-
-                {/* Why no password  expandable */}
-                <button
-                  type="button"
-                  onClick={() => setWhy((v) => !v)}
-                  className="flex w-full items-center justify-between border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-4 text-left text-sm font-medium"
-                >
-                  Why no password?
-                  <ChevronDown
-                    className={`size-4 transition-transform duration-200 ${why ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {why ? (
-                  <p className="text-left text-sm leading-relaxed text-muted-foreground">
-                    Passwords get reused, guessed and phished. A passkey can&apos;t be typed into a
-                    fake site  it only works on the real NovaBank domain, and it never leaves your
-                    device.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="space-y-5 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success/14 text-primary">
-                  <Check className="size-7" strokeWidth={2.4} />
-                </span>
-                <div className="space-y-2">
-                  <h1 className="text-2xl">Account created</h1>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    Save these 10 recovery codes somewhere offline. They&apos;re the only way back
-                    in if you ever lose every device. We don&apos;t store them  this is the only
-                    time you&apos;ll see them.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-4 text-left font-mono text-sm tracking-[0.08em]">
-                  {recoveryCodes.map((c) => (
-                    <span key={c}>{c}</span>
-                  ))}
-                </div>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => downloadRecoveryCodesPdf(recoveryCodes, email)}
-                >
-                  Download as PDF
-                </Button>
-                <Button size="lg" className="w-full" onClick={() => navigate({ to: "/dashboard" })}>
-                  I&apos;ve saved these  go to my account <ArrowRight className="size-4" />
-                </Button>
-                <Button size="lg" variant="outline" className="w-full" asChild>
-                  <Link to="/settings/security">Set up click-point login (optional)</Link>
-                </Button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep(1);
+                      setError(null);
+                    }}
+                    className="w-full text-center text-xs font-medium text-muted-foreground hover:text-ink"
+                  >
+                    ← Change name or phone number
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
+        </AuthBackground>
+      </main>
 
-          <p className="mt-6 text-center text-base font-medium text-ink/80 sm:mt-5 sm:text-sm sm:font-normal sm:text-muted-foreground">
-            Already with us?{" "}
-            <Link to="/login" className="font-bold text-ink underline-offset-4 hover:underline sm:font-semibold">
-              Sign in with a passkey
-            </Link>
-            {" · "}
-            <Link
-              to="/login/pccp"
-              className="font-bold text-ink underline-offset-4 hover:underline sm:font-semibold"
-            >
-              click-points
-            </Link>
-          </p>
-        </Reveal>
-      </AuthSplit>
-    </AuthBackground>
+      <Footer />
+    </NovaBackground>
   );
 }

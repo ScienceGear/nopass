@@ -132,6 +132,12 @@ export const phoneOtpVerifySchema = z.object({
   email: z.string().email().optional(),
 });
 
+export const verifyDualOtpSchema = z.object({
+  email: z.string().email(),
+  emailOtp: z.string().length(6),
+  phoneOtp: z.string().length(6),
+});
+
 export const phoneLoginRequestSchema = z.object({
   phone: z.string().regex(/^\+[1-9]\d{7,14}$/),
   deviceFingerprint: z.string().min(8).max(256),

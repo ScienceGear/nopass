@@ -1,10 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowUpRight, Github, LogOut, Menu, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowUpRight, Github, Menu, Shield, X } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { support } from "@/lib/config";
 import { Button } from "./primitives";
 import { useSession, clearSession } from "@/lib/session";
+import { getMe } from "@/lib/api";
 
 /* ── Logo ───────────────────────────────────────────────────────────────── */
 
@@ -54,7 +56,7 @@ export function NovaBackground({ children }: { children: React.ReactNode }) {
  * rounded inner panel so the auth card reads as a framed "page in page". */
 export function AuthBackground({ children }: { children: React.ReactNode }) {
   return (
-    <div className="nova-field nova-grain min-h-dvh w-full p-3 sm:p-6 lg:p-8">{children}</div>
+    <div className="nova-field nova-grain h-dvh w-full overflow-hidden p-3 sm:p-6 lg:p-8">{children}</div>
   );
 }
 
@@ -149,6 +151,14 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
   const { session } = useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  const meQuery = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: getMe,
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
+  const isAdmin = meQuery.data?.user?.isAdmin ?? false;
+
   React.useEffect(() => setOpen(false), [pathname]);
 
   React.useEffect(() => {
@@ -195,6 +205,14 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
           {session ? (
             <>
+              {isAdmin ? (
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/15 px-3 py-1.5 text-xs font-bold text-[oklch(0.85_0.14_85)] transition-all hover:bg-warning/25"
+                >
+                  <Shield className="size-3.5 text-warning" /> Admin Console
+                </Link>
+              ) : null}
               <span className="eyebrow pr-1">{session.name.split(" ")[0]}</span>
               <Button
                 variant="ghost"
@@ -214,7 +232,7 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="ghost" size="sm" asChild>
                 <Link to="/login">Log in</Link>
               </Button>
               <Button size="sm" asChild>
@@ -224,30 +242,15 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 lg:hidden">
-          {session ? (
-            <button
-              type="button"
-              aria-label="Log out"
-              onClick={() => {
-                clearSession();
-                window.location.assign("/");
-              }}
-              className="grid size-11 place-items-center rounded-full bg-muted text-ink"
-            >
-              <LogOut className="size-5" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="grid size-11 place-items-center rounded-full bg-muted text-ink"
-          >
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-ink lg:hidden"
+        >
+          {open ? <X className="size-5" /> : <Menu className="size-5" />}
+        </button>
       </header>
 
       {/* Mobile drawer */}
@@ -283,6 +286,13 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
           ))}
         </nav>
         <div className="mt-auto space-y-3 pt-8 shrink-0">
+          {session && isAdmin ? (
+            <Button variant="outline" className="w-full border-warning/40 text-warning" size="lg" asChild>
+              <Link to="/admin">
+                <Shield className="size-4" /> Admin Console
+              </Link>
+            </Button>
+          ) : null}
           <Button className="w-full" size="lg" asChild>
             <Link to={session ? "/dashboard" : "/signup"}>
               {session ? "Go to dashboard" : "Open account"}
@@ -327,8 +337,8 @@ const footerCols = [
     title: "Security",
     links: [
       { to: "/security", label: "How it works" },
-      { to: "/activity", label: "Login history", auth: true },
-      { to: "/settings/security", label: "Your passkeys", auth: true },
+      { to: "/activity", label: "Login history" },
+      { to: "/settings/security", label: "Your passkeys" },
     ],
   },
   {
@@ -343,13 +353,12 @@ const footerCols = [
     links: [
       { to: "/privacy", label: "Privacy" },
       { to: "/terms", label: "Terms" },
+      { to: "/security", label: "Security" },
     ],
   },
 ] as const;
 
 export function Footer() {
-  const { session } = useSession();
-
   return (
     <footer className="mt-20 border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-12">
       <div className="mb-10 flex flex-col items-center justify-between gap-4 rounded-3xl bg-lime-soft p-6 sm:flex-row">
@@ -373,19 +382,16 @@ export function Footer() {
           <div key={col.title} className="min-w-0">
             <p className="eyebrow">{col.title}</p>
             <ul className="mt-4 space-y-2.5">
-              {col.links.map((l) => {
-                if ("auth" in l && l.auth && !session) return null;
-                return (
-                  <li key={col.title + l.label}>
-                    <Link
-                      to={l.to}
-                      className="text-sm text-muted-foreground transition-colors duration-200 hover:text-ink"
-                    >
-                      {l.label}
-                    </Link>
-                  </li>
-                );
-              })}
+              {col.links.map((l) => (
+                <li key={col.title + l.label}>
+                  <Link
+                    to={l.to}
+                    className="text-sm text-muted-foreground transition-colors duration-200 hover:text-ink"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
         ))}

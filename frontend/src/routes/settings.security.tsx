@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { Check, Download, KeyRound, Loader2, MousePointerClick, PhoneCall, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import { AlertTriangle, Check, Clock, Download, KeyRound, Loader2, Mail, MousePointerClick, PhoneCall, Plus, RotateCcw, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { Button, EmptyState, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
 import { PhoneInput } from "@/components/nova/PhoneInput";
 import { ListSkeleton } from "@/components/nova/skeletons";
@@ -23,6 +23,8 @@ import {
   postPasskey,
   postPhoneOtpRequest,
   postRegenerateRecoveryCodes,
+  postUserCancelAccountDeletion,
+  postUserRequestAccountDeletion,
   putNotificationPrefs,
   patchProfile,
   revokeDevice,
@@ -125,6 +127,61 @@ function SecuritySettings() {
       setPhoneMsg(error instanceof Error ? error.message : "Could not send the code.");
     } finally {
       setPhoneBusy(false);
+    }
+  }
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [deleteEmailOtp, setDeleteEmailOtp] = React.useState("");
+  const [deletePhoneOtp, setDeletePhoneOtp] = React.useState("");
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+  const [deleteMsg, setDeleteMsg] = React.useState<string | null>(null);
+
+  async function openDeletionDialog() {
+    setDeleteDialogOpen(true);
+    setDeleteMsg(null);
+    setDeleteEmailOtp("");
+    setDeletePhoneOtp("");
+    try {
+      if (profile.data?.email) {
+        await postPhoneOtpRequest({ phone: profile.data.phone || "", purpose: "verify" });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleConfirmAccountDeletion() {
+    if (!/^\d{6}$/.test(deleteEmailOtp) || !/^\d{6}$/.test(deletePhoneOtp)) {
+      setDeleteMsg("Enter 6-digit verification codes for both Email and Mobile OTP.");
+      return;
+    }
+    setDeleteBusy(true);
+    setDeleteMsg(null);
+    try {
+      await postUserRequestAccountDeletion({ emailOtp: deleteEmailOtp, phoneOtp: deletePhoneOtp });
+      toast.success("Account scheduled for deletion", {
+        description: "Your account will be deleted in 24 hours. You can cancel anytime before then.",
+      });
+      setDeleteDialogOpen(false);
+      await profile.refetch();
+    } catch (err) {
+      setDeleteMsg(err instanceof Error ? err.message : "Invalid verification codes.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  async function handleCancelAccountDeletion() {
+    setDeleteBusy(true);
+    try {
+      await postUserCancelAccountDeletion();
+      toast.success("Deletion request cancelled!", { description: "Your account remains active." });
+      await profile.refetch();
+    } catch (err) {
+      toast.error("Could not cancel deletion", {
+        description: err instanceof Error ? err.message : "Try again.",
+      });
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -495,29 +552,126 @@ function SecuritySettings() {
             </Reveal>
 
             {/* Notifications */}
-            <Reveal delay={200}>
-              <Panel>
-                <h2 className="text-lg">Alerts</h2>
-                <div className="mt-3 hairline-y">
-                  {(prefs.data ?? []).map((p) => (
-                    <div key={p.id} className="flex items-start justify-between gap-4 py-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{p.label}</p>
-                        <p className="text-[0.8125rem] text-muted-foreground">{p.hint}</p>
-                      </div>
-                      <Switch
-                        checked={p.enabled}
-                        disabled={savingPrefs}
-                        onCheckedChange={(checked) => togglePref(p.id, checked)}
-                        className="mt-1 shrink-0"
-                      />
-                    </div>
-                  ))}
-                  {prefs.isPending ? <ListSkeleton rows={3} /> : null}
+            <Reveal delay={250}>
+              <Panel className="border-destructive/20 bg-destructive/5">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-xl bg-destructive/15 text-destructive">
+                    <Trash2 className="size-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-bold text-ink">Delete Account</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Request permanent account removal with a 24-hour grace period for recovery.
+                    </p>
+                  </div>
                 </div>
+
+                {profile.data?.scheduledForDeletionAt ? (
+                  <div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-semibold text-destructive flex items-center gap-2 text-sm">
+                          <Clock className="size-4" /> Account Scheduled for Deletion
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Scheduled removal at:{" "}
+                          <span className="font-mono font-medium text-ink">
+                            {new Date(profile.data.scheduledForDeletionAt).toLocaleString()}
+                          </span>
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-success/40 text-success hover:bg-success/15"
+                        disabled={deleteBusy}
+                        onClick={handleCancelAccountDeletion}
+                      >
+                        <RotateCcw className="size-3.5" /> Cancel Deletion Request
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex justify-between items-center border-t border-hairline pt-4">
+                    <p className="text-xs text-muted-foreground">
+                      Requires dual verification (Email OTP + Phone OTP).
+                    </p>
+                    <Button variant="danger" size="sm" onClick={openDeletionDialog}>
+                      <Trash2 className="size-3.5" /> Delete My Account
+                    </Button>
+                  </div>
+                )}
               </Panel>
             </Reveal>
           </div>
+
+          {/* Account Deletion Dual Verification Dialog */}
+          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <DialogContent className="rounded-3xl sm:max-w-[28rem]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="size-5" /> Confirm Account Deletion
+                </DialogTitle>
+                <DialogDescription>
+                  To request deletion, enter the 6-digit verification codes sent to your Email and Phone.
+                  Your account will enter a 24-hour grace period before removal.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="del-email-otp" className="text-xs font-semibold">
+                    Email 6-Digit OTP
+                  </Label>
+                  <Input
+                    id="del-email-otp"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={deleteEmailOtp}
+                    onChange={(e) => setDeleteEmailOtp(e.target.value.replace(/\D/g, ""))}
+                    placeholder="••••••"
+                    className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="del-phone-otp" className="text-xs font-semibold">
+                    Mobile 6-Digit OTP
+                  </Label>
+                  <Input
+                    id="del-phone-otp"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={deletePhoneOtp}
+                    onChange={(e) => setDeletePhoneOtp(e.target.value.replace(/\D/g, ""))}
+                    placeholder="••••••"
+                    className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
+                  />
+                </div>
+
+                {deleteMsg ? (
+                  <p className="rounded-xl bg-destructive/15 px-3 py-2 text-xs text-destructive">
+                    {deleteMsg}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  disabled={deleteBusy}
+                  onClick={handleConfirmAccountDeletion}
+                >
+                  {deleteBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Confirm Deletion (24h)
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={showCodes} onOpenChange={setShowCodes}>
             <DialogContent className="rounded-3xl sm:max-w-[28rem]">

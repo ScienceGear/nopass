@@ -20,6 +20,8 @@ name          String
   balance       Decimal  @default(500000) @db.Decimal(12, 2)
   emailVerified Boolean  @default(false) // gate: passkeys can only be registered after email verification
   onboardingStep String  @default("email_pending") // email_pending -> passkey_set -> complete
+  scheduledForDeletionAt DateTime?
+  deletionRequestedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

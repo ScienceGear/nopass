@@ -57,6 +57,7 @@ export interface UserProfile {
   phoneMasked: string;
   phone: string | null;
   phoneVerified: boolean;
+  scheduledForDeletionAt?: string | null;
   avatarUrl: string | null;
   memberSince: string;
 }
@@ -278,11 +279,13 @@ function authHeaders(): Record<string, string> {
 /* ── Auth ──────────────────────────────────────────────────────────────── */
 
 export async function postRegisterInitiate(input: { email: string; name: string; phone: string }) {
-  const res = await apiFetch<{ ok: boolean; email: string }>("/auth/register/initiate", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-  return { ok: res.ok, email: res.email };
+  return apiFetch<{ ok: boolean; email: string; phone?: string; devEmailOtp?: string; devPhoneOtp?: string }>(
+    "/auth/register/initiate",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export async function postVerifyEmail(token: string) {
@@ -1469,6 +1472,9 @@ export interface AdminUserLookup {
     phoneVerified: boolean;
     emailVerified: boolean;
     onboardingStep: string;
+    scheduledForDeletionAt?: string | null;
+    deletionRequestedAt?: string | null;
+    authMethods?: string[];
     createdAt: string;
   };
   stats: {
@@ -1530,8 +1536,11 @@ export interface AdminUserListItem {
   emailVerified: boolean;
   phoneVerified: boolean;
   onboardingStep: string;
+  scheduledForDeletionAt?: string | null;
+  deletionRequestedAt?: string | null;
   createdAt: string;
   passkeysCount: number;
+  authMethods: string[];
   activeSessionsCount: number;
   activeSessions: {
     id: string;
@@ -1545,6 +1554,33 @@ export interface AdminUserListItem {
 
 export async function getAdminUsersList() {
   return apiFetch<{ users: AdminUserListItem[] }>("/admin/users", { headers: authHeaders() });
+}
+
+export async function getAdminSystemStatus() {
+  return apiFetch<{
+    methods: { id: string; name: string; live: boolean; description: string }[];
+  }>("/admin/system-status", { headers: authHeaders() });
+}
+
+export async function postAdminClearRateLimits(userId: string) {
+  return apiFetch<{ ok: boolean; userId: string; email: string; message: string }>(
+    `/admin/user/${encodeURIComponent(userId)}/clear-rate-limits`,
+    { method: "POST", headers: authHeaders() },
+  );
+}
+
+export async function postAdminScheduleUserDeletion(userId: string) {
+  return apiFetch<{ ok: boolean; userId: string; email: string; scheduledForDeletionAt: string }>(
+    `/admin/user/${encodeURIComponent(userId)}/schedule-deletion`,
+    { method: "POST", headers: authHeaders() },
+  );
+}
+
+export async function postAdminRestoreUserAccount(userId: string) {
+  return apiFetch<{ ok: boolean; userId: string; email: string; restored: boolean }>(
+    `/admin/user/${encodeURIComponent(userId)}/restore-account`,
+    { method: "POST", headers: authHeaders() },
+  );
 }
 
 export async function deleteAdminUser(userId: string) {
@@ -1569,6 +1605,64 @@ export async function postAdminSendUserResetEmail(userId: string) {
     `/admin/user/${encodeURIComponent(userId)}/send-reset-email`,
     { method: "POST", headers: authHeaders() },
   );
+}
+
+export async function postVerifyDualOtp(input: {
+  email: string;
+  emailOtp: string;
+  phoneOtp: string;
+}) {
+  return apiFetch<{
+    ok: boolean;
+    token: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      emailVerified: boolean;
+      phoneVerified: boolean;
+      onboardingStep: string;
+    };
+  }>("/auth/register/verify-dual-otp", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postUserRequestAccountDeletion(input: {
+  emailOtp: string;
+  phoneOtp: string;
+}) {
+  return apiFetch<{ ok: boolean; scheduledForDeletionAt: string }>("/user/profile/request-deletion", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getMe() {
+  return apiFetch<{
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      createdAt: string;
+      emailVerified: boolean;
+      phoneVerified: boolean;
+      onboardingStep: string;
+      scheduledForDeletionAt?: string | null;
+      deletionRequestedAt?: string | null;
+      isAdmin?: boolean;
+    };
+  }>("/auth/me", { headers: authHeaders() });
+}
+
+export async function postUserCancelAccountDeletion() {
+  return apiFetch<{ ok: boolean }>("/user/profile/cancel-deletion", {
+    method: "POST",
+    headers: authHeaders(),
+  });
 }
 
 /* ── Session helpers for the UI ────────────────────────────────────────── */

@@ -62,6 +62,7 @@ import {
   refreshSchema,
   stepUpVerifySchema,
   verifyEmailSchema,
+  verifyDualOtpSchema,
   imageChallengeSetupSchema,
   onboardingImageSequenceSchema,
   emailLoginRequestSchema,
@@ -203,12 +204,13 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     if (existing.emailVerified) {
-      throw new AppError(409, "This email is already verified  sign in to finish setting up your account.", {
+      throw new AppError(409, "This email is already verified — sign in to finish setting up your account.", {
         code: "ONBOARDING_INCOMPLETE",
         currentStep: existing.onboardingStep,
       });
     }
-    logger.info(`Resending verification email for pending signup ${normalizedEmail}`);
+    logger.info(`Resending verification codes for pending signup ${normalizedEmail}`);
+    await prisma.user.update({ where: { email: normalizedEmail }, data: { name: name.trim(), phone } });
   } else {
     await prisma.user.create({
       data: {
@@ -220,22 +222,55 @@ export const registerInitiate: RequestHandler = asyncHandler(async (req, res) =>
     });
   }
 
-  const token = randomToken("ve", 18);
-  await prisma.emailVerificationToken.deleteMany({ where: { userId: existing?.id ?? "" } });
-  const pending = await prisma.user.update({ where: { email: normalizedEmail }, data: { name: name.trim(), phone } });
-  await prisma.emailVerificationToken.upsert({
-    where: { userId: pending.id },
-    create: { userId: pending.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
-    update: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
-  });
-
-  const verifyLink = `${getAppOrigin()}/verify-email?token=${encodeURIComponent(token)}`;
-  await sendVerificationEmail(normalizedEmail, name.trim(), verifyLink);
+  const emailCode = await sendOtp(normalizedEmail, "signup_email");
+  let phoneCode: string | null = null;
+  if (phone) {
+    phoneCode = await sendPhoneOtp(phone, "signup", phone);
+  }
 
   res.status(existing ? 200 : 201).json({
     ok: true,
     email: normalizedEmail,
-    ...(isProduction ? {} : { devVerifyUrl: verifyLink }),
+    phone,
+    ...(isProduction ? {} : { devEmailOtp: emailCode, devPhoneOtp: phoneCode }),
+  });
+});
+
+export const verifyDualOtp: RequestHandler = asyncHandler(async (req, res) => {
+  const { email, emailOtp, phoneOtp } = verifyDualOtpSchema.parse(req.body);
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (!user) throw new AppError(404, "Signup record not found. Start registration again.");
+
+  const emailOk = await verifyOtp(normalizedEmail, emailOtp, "signup_email");
+  if (!emailOk) throw new AppError(400, "Invalid or expired Email OTP code.");
+
+  if (user.phone) {
+    const phoneOk = await verifyPhoneOtp(user.phone, phoneOtp, "signup");
+    if (!phoneOk) throw new AppError(400, "Invalid or expired Phone OTP code.");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerified: true, phoneVerified: true, phoneVerifiedAt: new Date() },
+  });
+
+  const accessToken = signAccessToken({ sub: updatedUser.id, email: updatedUser.email });
+  const refreshToken = signRefreshToken({ sub: updatedUser.id, email: updatedUser.email });
+
+  res.json({
+    ok: true,
+    token: accessToken,
+    refreshToken,
+    user: {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      emailVerified: updatedUser.emailVerified,
+      phoneVerified: updatedUser.phoneVerified,
+      onboardingStep: updatedUser.onboardingStep,
+    },
   });
 });
 
@@ -1123,6 +1158,12 @@ export const me: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.userId) throw new AppError(401, "Not authenticated.");
   const user = await prisma.user.findUnique({ where: { id: req.userId } });
   if (!user) throw new AppError(404, "User not found.");
+
+  const allowedAdmins = new Set(
+    env.ADMIN_EMAILS.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
+  );
+  const isAdmin = allowedAdmins.has(user.email.toLowerCase());
+
   res.json({
     user: {
       id: user.id,
@@ -1132,6 +1173,9 @@ export const me: RequestHandler = asyncHandler(async (req, res) => {
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
       onboardingStep: user.onboardingStep,
+      scheduledForDeletionAt: user.scheduledForDeletionAt,
+      deletionRequestedAt: user.deletionRequestedAt,
+      isAdmin,
     },
   });
 });

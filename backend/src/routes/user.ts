@@ -9,5 +9,7 @@ router.use(requireCompletedOnboarding);
 
 router.get("/profile", user.getProfile);
 router.patch("/profile", user.updateProfile);
+router.post("/profile/request-deletion", user.requestDeletion);
+router.post("/profile/cancel-deletion", user.cancelDeletion);
 
 export default router;
