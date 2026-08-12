@@ -37,13 +37,23 @@ async function saveChallenge(challenge: string, data: StoredChallenge) {
   await getRedis().set(`webauthn:challenge:${challenge}`, JSON.stringify(data), "EX", CHALLENGE_TTL);
 }
 
-/** Pop the stored challenge and validate it matches the client-echoed one. */
-async function takeChallenge(echoedChallenge: string, expectedType: StoredChallenge["type"]): Promise<StoredChallenge> {
+/** Read the stored challenge WITHOUT deleting it yet. Caller must call deleteChallenge() after successful verification. */
+async function peekChallenge(echoedChallenge: string, expectedType: StoredChallenge["type"]): Promise<StoredChallenge> {
   const raw = await getRedis().get(`webauthn:challenge:${echoedChallenge}`);
-  if (!raw) throw new AppError(400, "Challenge expired  please try again.");
-  await getRedis().del(`webauthn:challenge:${echoedChallenge}`);
+  if (!raw) throw new AppError(400, "Challenge expired \u2014 please try again.");
   const stored = JSON.parse(raw) as StoredChallenge;
   if (stored.type !== expectedType) throw new AppError(400, "Challenge mismatch.");
+  return stored;
+}
+
+async function deleteChallenge(challenge: string) {
+  await getRedis().del(`webauthn:challenge:${challenge}`);
+}
+
+/** @deprecated Use peekChallenge + deleteChallenge instead. */
+async function takeChallenge(echoedChallenge: string, expectedType: StoredChallenge["type"]): Promise<StoredChallenge> {
+  const stored = await peekChallenge(echoedChallenge, expectedType);
+  await deleteChallenge(echoedChallenge);
   return stored;
 }
 
@@ -119,7 +129,7 @@ export async function buildAdditionalRegistrationOptions(
 
 export async function verifyRegistrationResponseCredential(email: string, response: RegistrationResponseJSON): Promise<RegistrationResult> {
   const echoedChallenge = challengeFromClientData(response.response.clientDataJSON);
-  const stored = await takeChallenge(echoedChallenge, "registration");
+  const stored = await peekChallenge(echoedChallenge, "registration");
   if (stored.type !== "registration") throw new AppError(400, "Challenge mismatch.");
   if (stored.email !== email) throw new AppError(400, "Email does not match the registration request.");
 
@@ -131,6 +141,9 @@ export async function verifyRegistrationResponseCredential(email: string, respon
     requireUserVerification: true,
   });
   if (!verified || !registrationInfo) throw new AppError(400, "WebAuthn registration failed verification.");
+
+  // Only consume the challenge after successful verification to allow a single retry on transient failures.
+  await deleteChallenge(echoedChallenge);
 
   return {
     email: stored.email,
@@ -178,7 +191,7 @@ export async function verifyAuthenticationResponseCredential(
   credential: UserCredentialRecord,
 ): Promise<AuthenticationResult> {
   const echoedChallenge = challengeFromClientData(response.response.clientDataJSON);
-  const stored = await takeChallenge(echoedChallenge, "authentication");
+  const stored = await peekChallenge(echoedChallenge, "authentication");
   if (stored.email !== email) throw new AppError(400, "Email does not match the authentication request.");
 
   const { verified, authenticationInfo } = await verifyAuthenticationResponse({
@@ -190,6 +203,9 @@ export async function verifyAuthenticationResponseCredential(
     requireUserVerification: false,
   });
   if (!verified) throw new AppError(400, "WebAuthn authentication failed verification.");
+
+  // Only consume the challenge after successful verification.
+  await deleteChallenge(echoedChallenge);
 
   return {
     email,

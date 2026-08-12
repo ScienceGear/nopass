@@ -109,6 +109,10 @@ export interface ActivityEvent {
   isCurrent?: boolean;
   /** Present on login events whose session can still be revoked. */
   sessionId?: string;
+  /** True for blocked, step-up, or image-challenge login events — shows in Alerts tab. */
+  isAlert?: boolean;
+  /** Raw riskAction from backend. */
+  riskAction?: string;
 }
 
 export interface Passkey {
@@ -1179,6 +1183,7 @@ export async function getActivity(): Promise<ActivityEvent[]> {
     const city = e.city ?? (e.location?.split(",")[0]?.trim() || "Unknown");
     const country = e.country ?? (e.location?.split(",")[1]?.trim() || "");
     const isLogin = e.type === "login";
+    const isAlertEvent = e.type === "alert" || ["block", "step_up", "image_challenge"].includes(e.riskAction ?? "");
     return {
       id: e.id,
       type: (e.type === "transaction" ? "transfer" : e.type) as ActivityEvent["type"],
@@ -1195,6 +1200,8 @@ export async function getActivity(): Promise<ActivityEvent[]> {
       signal: signal || detail || e.title,
       sessionActive: e.sessionActive ?? (isLogin && e.riskAction === "allow"),
       isCurrent: e.isCurrent ?? false,
+      riskAction: e.riskAction,
+      isAlert: isAlertEvent,
       ...(sessionId ? { sessionId } : {}),
     };
   });

@@ -91,7 +91,15 @@ export const activity: RequestHandler = asyncHandler(async (req, res) => {
         const parsed = JSON.parse(l.details ?? "{}") as Record<string, unknown>;
         if (parsed && typeof parsed === "object") {
           if (typeof parsed.sessionId === "string") sessionId = parsed.sessionId;
-          if (typeof parsed.signal === "string") signal = parsed.signal;
+          if (typeof parsed.signal === "string") {
+            signal = parsed.signal;
+          } else if (Array.isArray(parsed.signals)) {
+            // Blocked/step-up logins store signals as an array of { name, score } objects
+            signal = parsed.signals
+              .map((s: unknown) => (typeof s === "object" && s !== null ? (s as { name?: string }).name : String(s)))
+              .filter(Boolean)
+              .join(", ");
+          }
         }
       } catch {
         /* details is a plain string */
@@ -104,11 +112,17 @@ export const activity: RequestHandler = asyncHandler(async (req, res) => {
         id: l.id,
         type: l.eventType,
         title:
-          l.eventType === "login"
-            ? "Sign-in"
-            : l.eventType === "transfer"
-              ? "Transfer"
-              : l.eventType,
+          l.riskAction === "block"
+            ? "Blocked sign-in"
+            : l.riskAction === "step_up"
+              ? "Step-up required"
+              : l.eventType === "login"
+                ? "Sign-in"
+                : l.eventType === "transfer"
+                  ? "Transfer"
+                  : l.eventType === "alert"
+                    ? "Security alert"
+                    : l.eventType,
         detail: l.details,
         signal,
         device: l.deviceInfo,

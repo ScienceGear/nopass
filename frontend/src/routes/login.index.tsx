@@ -333,7 +333,7 @@ function LoginPage() {
         tips={loginTips}
       >
         <Reveal className="w-full max-w-[26rem]">
-          <div className="rounded-[1.75rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-5 text-center shadow-card sm:px-6 sm:py-6">
+          <div className="rounded-[2rem] border border-[oklch(0.207_0.014_251_/_0.07)] bg-card px-5 py-5 text-center shadow-card sm:px-6 sm:py-6">
             {stage === "email" ? (
               <form onSubmit={startLogin} className="space-y-6 text-left">
                 <div className="space-y-2 text-center">
@@ -356,11 +356,11 @@ function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={emailKeys.onKeyDown}
                     placeholder="you@email.com"
-                    className="h-12 rounded-2xl"
+                    className="h-12 rounded-[2rem]"
                   />
                 </div>
                 {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <p className="rounded-[2rem] bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {error}
                   </p>
                 ) : null}
@@ -438,7 +438,7 @@ function LoginPage() {
                   </p>
                 </div>
                 {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <p className="rounded-[2rem] bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {error}
                   </p>
                 ) : null}
@@ -509,10 +509,10 @@ function LoginPage() {
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                   onKeyDown={otpKeys.onKeyDown}
                   placeholder="••••••"
-                  className="tnum h-14 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                  className="tnum h-12 rounded-[2rem] text-center font-mono text-xl tracking-[0.4em]"
                 />
                 {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <p className="rounded-[2rem] bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {error}
                   </p>
                 ) : null}

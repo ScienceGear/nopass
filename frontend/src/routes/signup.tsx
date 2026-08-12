@@ -188,7 +188,7 @@ function Signup() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Alex Chen"
-                      className="h-11 rounded-2xl"
+                      className="h-11 rounded-[2rem]"
                     />
                   </div>
 
@@ -201,7 +201,7 @@ function Signup() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="alex@company.com"
-                      className="h-11 rounded-2xl"
+                      className="h-11 rounded-[2rem]"
                     />
                   </div>
 
@@ -216,7 +216,7 @@ function Signup() {
                 </div>
 
                 {error ? (
-                  <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <p className="rounded-[2rem] bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {error}
                   </p>
                 ) : null}
@@ -267,7 +267,7 @@ function Signup() {
                       value={emailOtp}
                       onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
                       placeholder="••••••"
-                      className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      className="tnum h-12 rounded-[2rem] text-center font-mono text-xl tracking-[0.4em]"
                     />
                   </div>
 
@@ -299,7 +299,7 @@ function Signup() {
                       value={phoneOtp}
                       onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
                       placeholder="••••••"
-                      className="tnum h-12 rounded-2xl text-center font-mono text-xl tracking-[0.4em]"
+                      className="tnum h-12 rounded-[2rem] text-center font-mono text-xl tracking-[0.4em]"
                     />
                   </div>
                 </div>

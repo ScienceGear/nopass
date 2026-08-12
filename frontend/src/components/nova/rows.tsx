@@ -111,8 +111,10 @@ export function ActivityRow({
   onRevoke?: () => void;
   revoking?: boolean;
 }) {
-  const FallbackIcon = activityIcon[event.type];
-  const showDeviceIcon = event.type !== "transfer" && event.type !== "alert";
+  const isBlockedLogin = event.isAlert && event.type === "login";
+  const FallbackIcon = isBlockedLogin ? ShieldAlert : activityIcon[event.type];
+  // Show device icon for login events (even blocked ones) since they have device info
+  const showDeviceIcon = (event.type === "login" || (event.type !== "transfer" && event.type !== "alert")) && !isBlockedLogin;
   const locationLabel = formatLocation(event.city, event.country);
   const listIp = formatActivityIp(event.ipAddress, event.ipMasked, "list");
 
@@ -146,14 +148,23 @@ export function ActivityRow({
           {showDeviceIcon ? <DeviceIconTile kind={event.deviceIcon} /> : <FallbackIcon />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {event.deviceLabel}
+          <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-semibold">
+            {event.signal && isBlockedLogin ? (
+              <span className="truncate">{event.signal || event.deviceLabel}</span>
+            ) : (
+              <span className="truncate">{event.deviceLabel}</span>
+            )}
             {event.isCurrent ? (
-              <span className="ml-2 inline-block rounded-full bg-lime-soft px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-ink">
+              <span className="inline-block rounded-full bg-lime-soft px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-ink">
                 This device
               </span>
             ) : null}
-            <span className="font-normal text-muted-foreground"> · {locationLabel}</span>
+            {isBlockedLogin ? (
+              <span className="inline-block rounded-full bg-destructive/10 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-destructive">
+                Blocked
+              </span>
+            ) : null}
+            <span className="font-normal text-muted-foreground">· {locationLabel}</span>
           </p>
           <p className="truncate font-mono text-[0.6875rem] tracking-[0.04em] text-muted-foreground">
             {fullTime(event.timestamp)} · IP {listIp}

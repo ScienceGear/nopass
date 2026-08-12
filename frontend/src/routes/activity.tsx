@@ -51,15 +51,13 @@ function Activity() {
   const [revoking, setRevoking] = React.useState<string | null>(null);
   const [confirmAll, setConfirmAll] = React.useState(false);
 
-  const events = (data ?? []).filter((e) =>
-    filter === "All"
-      ? true
-      : filter === "Logins"
-        ? e.type === "login"
-        : filter === "Transfers"
-          ? e.type === "transfer"
-          : e.type === "alert",
-  );
+  const events = (data ?? []).filter((e) => {
+    if (filter === "All") return true;
+    if (filter === "Logins") return e.type === "login" && !e.isAlert;
+    if (filter === "Transfers") return e.type === "transfer";
+    if (filter === "Alerts") return e.type === "alert" || e.isAlert;
+    return true;
+  });
   const active = events.find((e) => e.id === selected) ?? events[0];
 
   async function revoke(sessionId: string, eventId: string) {
