@@ -50,9 +50,9 @@ router.post("/login/qr/exchange", authLimiter, auth.qrExchange);
 // Step-up verification
 router.post("/step-up/verify", otpLimiter, auth.stepUpVerify);
 
-// PCCP click-point authentication (setup routes require a completed account)
-router.post("/pccp/register/init", authLimiter, requireAuth, requireCompletedOnboarding, pccp.pccpRegisterInit);
-router.post("/pccp/register/confirm", authLimiter, requireAuth, requireCompletedOnboarding, pccp.pccpRegisterConfirm);
+// PCCP click-point authentication
+router.post("/pccp/register/init", authLimiter, requireAuth, pccp.pccpRegisterInit);
+router.post("/pccp/register/confirm", authLimiter, requireAuth, pccp.pccpRegisterConfirm);
 router.post("/pccp/login/init", authLimiter, pccp.pccpLoginInit);
 router.post("/pccp/login/verify", authLimiter, pccp.pccpLoginVerify);
 router.post("/pccp/stepup/confirm", authLimiter, pccp.pccpStepupConfirm);
