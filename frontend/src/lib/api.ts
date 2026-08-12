@@ -1150,13 +1150,26 @@ export async function getActivity(): Promise<ActivityEvent[]> {
     let sessionId = e.sessionId;
     let signal = e.signal;
     try {
-      const parsed = JSON.parse(e.detail);
-      if (parsed && typeof parsed === "object") {
-        if (typeof parsed.signal === "string") signal = parsed.signal;
-        if (typeof parsed.sessionId === "string") {
-          sessionId = sessionId ?? parsed.sessionId;
+      if (e.detail && e.detail.startsWith("{")) {
+        const parsed = JSON.parse(e.detail);
+        if (parsed && typeof parsed === "object") {
+          if (typeof parsed.signal === "string") {
+            signal = parsed.signal;
+          } else if (Array.isArray(parsed.signals)) {
+            signal = parsed.signals.map((s: any) => typeof s === "object" ? s.name : s).join(", ");
+          } else if (parsed.risk && Array.isArray(parsed.risk.signals)) {
+            signal = parsed.risk.signals.map((s: any) => typeof s === "object" ? s.name : s).join(", ");
+          }
+
+          if (!signal && parsed.reason) {
+            signal = String(parsed.reason);
+          }
+
+          if (typeof parsed.sessionId === "string") {
+            sessionId = sessionId ?? parsed.sessionId;
+          }
         }
-        detail = signal ?? detail;
+        detail = signal || "No security anomalies detected.";
       }
     } catch {
       /* detail is a plain string */

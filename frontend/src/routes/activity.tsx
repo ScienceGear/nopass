@@ -138,19 +138,8 @@ function Activity() {
                 <p className="eyebrow">Selected event</p>
                 {active ? (
                   <>
-                    {/* MAP SLOT  drop a static map render here (720×420) */}
-                    <div className="mt-4 grid h-40 place-items-center overflow-hidden rounded-2xl bg-lime-soft">
-                      <div
-                        aria-hidden="true"
-                        className="size-full object-cover opacity-0"
-                        data-slot="activity-map"
-                      />
-                      <span className="-mt-40 flex items-center gap-2 text-sm font-medium">
-                        <MapPin className="size-4" />{" "}
-                        {formatLocation(active.city, active.country)}
-                      </span>
-                    </div>
                     <div className="mt-4 hairline-y">
+                      <MetaLine label="Location" value={formatLocation(active.city, active.country)} />
                       <MetaLine label="Device" value={active.deviceLabel} />
                       <MetaLine
                         label="IP"
