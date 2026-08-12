@@ -686,6 +686,7 @@ export async function postPhoneOtpRequest(input: {
   phone: string;
   purpose: PhoneOtpPurpose;
   email?: string;
+  channel?: "sms" | "voice";
 }): Promise<PhoneOtpRequestResult> {
   return apiFetch<PhoneOtpRequestResult>("/auth/phone-otp/request", {
     method: "POST",

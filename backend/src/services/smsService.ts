@@ -93,6 +93,7 @@ export async function sendPhoneOtp(
   phone: string,
   purpose: PhoneOtpPurpose,
   quotaKey: string,
+  channel: "sms" | "voice" = "sms",
 ): Promise<string | null> {
   const withinQuota = await consumeSmsQuota(quotaKey);
   if (!withinQuota) return null;
@@ -103,13 +104,20 @@ export async function sendPhoneOtp(
     data: { phone, codeHash, purpose, expiresAt: new Date(Date.now() + PHONE_OTP_TTL_MS) },
   });
 
-  await sendSms(
-    phone,
-    `NovaBank: your verification code is ${code}. It expires in 10 minutes. Never share this code.`,
-    code,
-  );
+  if (channel === "voice") {
+    const voiceSent = await sendStringeeVoiceOtp(phone, code);
+    if (!voiceSent && !isProduction) {
+      logger.info(`[voice:dev] Voice OTP callout triggered for ${maskPhone(phone)}: ${code}`);
+    }
+  } else {
+    await sendSms(
+      phone,
+      `NovaBank: your verification code is ${code}. It expires in 10 minutes. Never share this code.`,
+      code,
+    );
+  }
 
-  if (!isProduction) logger.info(`[dev] Phone OTP for ${maskPhone(phone)}: ${code}`);
+  if (!isProduction) logger.info(`[dev] Phone OTP (${channel}) for ${maskPhone(phone)}: ${code}`);
   return code;
 }
 

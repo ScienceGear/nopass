@@ -773,7 +773,7 @@ function maskPhone(phone: string): string {
  * is: per-user for signed-in flows, per-phone for anonymous ones.
  */
 export const requestPhoneOtp: RequestHandler = asyncHandler(async (req, res) => {
-  const { phone, purpose, email } = phoneOtpRequestSchema.parse(req.body);
+  const { phone, purpose, email, channel } = phoneOtpRequestSchema.parse(req.body);
 
   let quotaKey = phone;
   let targetPhone = phone;
@@ -795,7 +795,7 @@ export const requestPhoneOtp: RequestHandler = asyncHandler(async (req, res) => 
     quotaKey = user ? `user:${user.id}` : phone;
   }
 
-  const code = await sendPhoneOtp(targetPhone, purpose, quotaKey);
+  const code = await sendPhoneOtp(targetPhone, purpose, quotaKey, channel ?? "sms");
   if (code === null) {
     throw new AppError(429, "Daily SMS limit reached. Try again tomorrow.", {
       code: "SMS_LIMIT",

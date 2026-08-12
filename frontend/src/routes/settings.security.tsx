@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { Check, Download, KeyRound, Loader2, MousePointerClick, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, Download, KeyRound, Loader2, MousePointerClick, PhoneCall, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { Button, EmptyState, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
 import { PhoneInput } from "@/components/nova/PhoneInput";
 import { ListSkeleton } from "@/components/nova/skeletons";
@@ -106,15 +106,21 @@ function SecuritySettings() {
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
-  async function sendPhoneCode() {
+  async function sendPhoneCode(channel: "sms" | "voice" = "sms") {
     if (!phone) return;
     setPhoneBusy(true);
     setPhoneMsg(null);
     try {
-      await postPhoneOtpRequest({ phone, purpose: "phone_change" });
+      await postPhoneOtpRequest({ phone, purpose: "phone_change", channel });
       setPhoneOtpSent(true);
       setPhoneOtp("");
-      toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+      if (channel === "voice") {
+        toast.success("Calling your phone…", {
+          description: `Triggered voice call to ${phone} with your 6-digit code.`,
+        });
+      } else {
+        toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+      }
     } catch (error) {
       setPhoneMsg(error instanceof Error ? error.message : "Could not send the code.");
     } finally {
@@ -194,37 +200,62 @@ function SecuritySettings() {
                     {phoneChanged ? (
                       <div className="space-y-2">
                         {phoneOtpSent ? (
-                          <div className="flex gap-2">
-                            <Input
-                              autoFocus
-                              inputMode="numeric"
-                              maxLength={6}
-                              value={phoneOtp}
-                              onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
-                              placeholder="••••••"
-                              className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
-                            />
-                            <button
-                              type="button"
-                              onClick={sendPhoneCode}
-                              disabled={phoneBusy}
-                              className="shrink-0 rounded-2xl border border-input px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-ink"
-                            >
-                              Resend
-                            </button>
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                autoFocus
+                                inputMode="numeric"
+                                maxLength={6}
+                                value={phoneOtp}
+                                onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                                placeholder="••••••"
+                                className="tnum h-11 rounded-2xl text-center font-mono text-lg tracking-[0.4em]"
+                              />
+                            </div>
+                            <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-xs text-muted-foreground">
+                              <button
+                                type="button"
+                                onClick={() => sendPhoneCode("sms")}
+                                disabled={phoneBusy}
+                                className="font-medium transition-colors hover:text-ink"
+                              >
+                                Resend SMS
+                              </button>
+                              <span>·</span>
+                              <button
+                                type="button"
+                                onClick={() => sendPhoneCode("voice")}
+                                disabled={phoneBusy}
+                                className="flex items-center gap-1.5 font-bold text-ink hover:underline"
+                              >
+                                <PhoneCall className="size-3.5 text-lime" /> Call me instead
+                              </button>
+                            </div>
                           </div>
                         ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="w-full"
-                            disabled={phoneBusy}
-                            onClick={sendPhoneCode}
-                          >
-                            {phoneBusy ? <Loader2 className="size-4 animate-spin" /> : null}
-                            Text me a verification code
-                          </Button>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              disabled={phoneBusy}
+                              onClick={() => sendPhoneCode("sms")}
+                            >
+                              {phoneBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                              Text me a code
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="w-full font-semibold"
+                              disabled={phoneBusy}
+                              onClick={() => sendPhoneCode("voice")}
+                            >
+                              <PhoneCall className="size-3.5 text-lime" /> Call me instead
+                            </Button>
+                          </div>
                         )}
                         {phoneMsg ? (
                           <p className="text-xs text-destructive">{phoneMsg}</p>

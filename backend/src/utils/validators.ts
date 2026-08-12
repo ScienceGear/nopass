@@ -122,6 +122,7 @@ export const phoneOtpRequestSchema = z.object({
     .regex(/^\+[1-9]\d{7,14}$/, "Use an international phone number, for example +919876543210."),
   purpose: z.enum(["signup", "phone_change", "verify", "login_step_up", "recover"]),
   email: z.string().email().optional(),
+  channel: z.enum(["sms", "voice"]).optional(),
 });
 
 export const phoneOtpVerifySchema = z.object({

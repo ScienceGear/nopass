@@ -10,6 +10,7 @@ import {
   Mail,
   MailCheck,
   MousePointerClick,
+  PhoneCall,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -149,12 +150,18 @@ function Signup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, phoneVerified]);
 
-  async function sendPhoneCode() {
+  async function sendPhoneCode(channel: "sms" | "voice" = "sms") {
     setPhoneError(null);
     try {
-      await postPhoneOtpRequest({ phone, purpose: "signup", email });
+      await postPhoneOtpRequest({ phone, purpose: "signup", email, channel });
       setPhoneSent(true);
-      toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+      if (channel === "voice") {
+        toast.success("Calling your phone…", {
+          description: `Triggered voice call to ${phone} with your 6-digit code.`,
+        });
+      } else {
+        toast.success("Code sent", { description: `We texted a 6-digit code to ${phone}.` });
+      }
     } catch (err) {
       setPhoneError(err instanceof Error ? err.message : "Could not send the code.");
     }
@@ -417,13 +424,23 @@ function Signup() {
                     </p>
                   ) : null}
                   {!phoneVerified ? (
-                    <button
-                      type="button"
-                      onClick={sendPhoneCode}
-                      className="w-full text-center text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-                    >
-                      Re-send the code
-                    </button>
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-xs text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() => sendPhoneCode("sms")}
+                        className="font-medium transition-colors hover:text-ink"
+                      >
+                        Re-send SMS
+                      </button>
+                      <span>·</span>
+                      <button
+                        type="button"
+                        onClick={() => sendPhoneCode("voice")}
+                        className="flex items-center gap-1.5 font-bold text-ink hover:underline"
+                      >
+                        <PhoneCall className="size-3.5 text-lime" /> Call me instead
+                      </button>
+                    </div>
                   ) : null}
                 </div>
 
