@@ -395,6 +395,13 @@ function Recover() {
               >
                 Sign in
               </Link>
+              {" · "}
+              <Link
+                to="/login/pccp"
+                className="font-semibold text-ink underline-offset-4 hover:underline"
+              >
+                Click-points
+              </Link>
             </p>
           </div>
         </Reveal>

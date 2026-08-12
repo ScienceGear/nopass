@@ -10,6 +10,7 @@ import {
   verifyRegistrationResponseCredential,
   buildUserCredentialsFromDb,
 } from "../services/webauthnService.js";
+import { checkLockout } from "../services/pccpService.js";
 
 // ---------------------------------------------------------------------------
 // SESSIONS
@@ -399,4 +400,39 @@ export const updateNotificationPrefs: RequestHandler = asyncHandler(async (req, 
     alertBlockedSignIn: record.alertBlockedSignIn,
     alertProductUpdates: record.alertProductUpdates,
   });
+});
+
+// ---------------------------------------------------------------------------
+// PCCP (click-point login)
+// ---------------------------------------------------------------------------
+
+export const pccpStatus: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const userId = req.userId;
+  const [config, clickpoints, lockout] = await Promise.all([
+    prisma.pccpConfig.findUnique({ where: { userId } }),
+    prisma.pccpClickpoint.count({ where: { userId } }),
+    checkLockout(userId),
+  ]);
+  res.json({
+    enrolled: config?.enrolled ?? false,
+    clickpoints,
+    locked: lockout.locked,
+    lockedUntil: lockout.lockedUntil?.toISOString(),
+  });
+});
+
+export const pccpDisable: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.userId) throw new AppError(401, "Not authenticated.");
+  const userId = req.userId;
+  await prisma.$transaction([
+    prisma.pccpClickpoint.deleteMany({ where: { userId } }),
+    prisma.pccpBehaviorBaseline.deleteMany({ where: { userId } }),
+    prisma.pccpLockout.deleteMany({ where: { userId } }),
+    prisma.pccpConfig.updateMany({
+      where: { userId },
+      data: { enrolled: false, attemptIndex: 0 },
+    }),
+  ]);
+  res.json({ disabled: true });
 });

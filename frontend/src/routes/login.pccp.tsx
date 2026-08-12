@@ -147,7 +147,7 @@ function PccpLoginPage() {
     } catch (err) {
       if (err instanceof ApiError && err.code === "NO_PCCP") {
         setError(
-          "No click-point login set up for this account yet. Set one up in Security settings, or sign in with a passkey.",
+          "Click-point login isn't set up for this account yet. Sign in with your passkey first, then open Security settings to set it up.",
         );
       } else if (err instanceof ApiError) {
         setError(err.message);
@@ -219,7 +219,7 @@ function PccpLoginPage() {
       setStage("email");
       setError(
         res.reason === "timing_anomaly"
-          ? "This attempt was flagged as unusual and stopped. Try again, or sign in with a passkey."
+          ? "This attempt looked unusual. Confirm with your passkey on the next screen, or try again."
           : `Click-points didn't match${
               res.attemptsLeft !== undefined ? ` — ${res.attemptsLeft} attempt(s) left` : ""
             }. Try again, or use a passkey instead.`,
@@ -315,9 +315,36 @@ function PccpLoginPage() {
                     />
                   </div>
                   {error ? (
-                    <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {error}
-                    </p>
+                    <div className="rounded-2xl bg-destructive/10 p-4 text-sm text-destructive">
+                      <p className="font-semibold">{error}</p>
+                      {error.includes("Security settings") || error.includes("set up") ? (
+                        <div className="mt-3 space-y-2 border-t border-destructive/20 pt-3 text-ink">
+                          <p className="text-xs text-muted-foreground">
+                            Sign in below, then go to <strong>Settings → Security</strong> to enable Click-point login:
+                          </p>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button size="sm" variant="outline" className="w-full justify-center" asChild>
+                              <Link
+                                to="/login"
+                                search={
+                                  email || redirect
+                                    ? {
+                                        ...(email ? { email } : {}),
+                                        ...(redirect ? { redirect } : {}),
+                                      }
+                                    : {}
+                                }
+                              >
+                                <Fingerprint className="mr-1.5 size-4" /> Sign in with Passkey
+                              </Link>
+                            </Button>
+                            <Button size="sm" variant="outline" className="w-full justify-center" asChild>
+                              <Link to="/recover">Other sign-in options</Link>
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   <Button type="submit" size="lg" className="w-full" disabled={busy}>
                     {busy ? "Starting…" : "Show my pictures"} <ArrowRight className="size-4" />

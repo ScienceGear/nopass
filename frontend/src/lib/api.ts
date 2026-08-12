@@ -1375,6 +1375,24 @@ export async function revokeDevice(id: string) {
   });
 }
 
+export interface PccpStatus {
+  enrolled: boolean;
+  clickpoints: number;
+  locked: boolean;
+  lockedUntil?: string;
+}
+
+export async function getPccpStatus(): Promise<PccpStatus> {
+  return apiFetch<PccpStatus>("/security/pccp", { headers: authHeaders() });
+}
+
+export async function deletePccpEnrollment() {
+  return apiFetch<{ disabled: boolean }>("/security/pccp", {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+
 /* ── User ──────────────────────────────────────────────────────────────── */
 
 export async function getProfile(): Promise<UserProfile> {

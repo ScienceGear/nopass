@@ -273,55 +273,18 @@ export const pccpLoginVerify: RequestHandler = asyncHandler(async (req, res) => 
     });
   }
 
-  // SOFT SIGNAL: timing z-score against the same device class's baseline.
+  // SOFT SIGNAL & BEHAVIORAL RISK DETECTION:
+  // Evaluate timing z-score against baseline AND risk engine score (new device, new IP, etc.).
   const baselines = await prisma.pccpBehaviorBaseline.findMany({
     where: { userId: user.id, deviceClass: body.deviceClass },
   });
+
+  let maxZ = 0;
   if (baselines.length > 0) {
-    const { maxZ } = computeTimingZScore(baselines, samples);
-    if (maxZ > STEPUP_Z_MAX) {
-      await deleteLoginState(body.token);
-      await prisma.loginHistory.create({
-        data: {
-          userId: user.id,
-          eventType: "alert",
-          deviceInfo: body.deviceInfo,
-          ipAddress: ip,
-          location: null,
-          riskScore: 0,
-          riskAction: "pccp_anomaly",
-          details: JSON.stringify({ maxZ }),
-        },
-      });
-      return res.json({ status: "rejected", reason: "timing_anomaly" });
-    }
-    if (maxZ > STEPUP_Z_MIN) {
-      const userCreds = buildUserCredentialsFromDb(user.credentials);
-      if (userCreds.length > 0) {
-        const stepupToken = await createStepupState({
-          userId: user.id,
-          email: state.email,
-          deviceClass: body.deviceClass,
-          timingSamples: samples,
-        });
-        const options = await buildAuthenticationOptions({
-          id: user.id,
-          email: state.email,
-          credentials: userCreds,
-        });
-        await deleteLoginState(body.token);
-        return res.json({ status: "stepup_required", stepupToken, options });
-      }
-      // No passkey on file for a step-up; the timing signal is soft only, so
-      // fall through to normal issuance rather than locking a passkey-less user.
-      logger.warn(
-        `PCCP timing anomaly (z=${maxZ.toFixed(2)}) on ${user.email} (no passkey for step-up); continuing`,
-      );
-    }
+    const timingRes = computeTimingZScore(baselines, samples);
+    maxZ = timingRes.maxZ;
   }
 
-  // Risk engine — block only. The click-point hard gate has already proven
-  // knowledge, so an additional step-up tier here would be redundant.
   const ctx: RiskContextInput = ctxFromBody({
     email: state.email,
     deviceFingerprint: body.deviceFingerprint,
@@ -330,8 +293,47 @@ export const pccpLoginVerify: RequestHandler = asyncHandler(async (req, res) => 
   });
   const input = await assessContext(user, ctx, ip);
   const assessment = evaluateRisk(input);
+
   if (assessment.action === "block") {
     throw new AppError(403, "Sign-in blocked by risk engine.", { risk: assessment });
+  }
+
+  const isSuspiciousBehavior = maxZ > STEPUP_Z_MIN || assessment.score > 30 || assessment.action !== "allow";
+  if (isSuspiciousBehavior) {
+    const userCreds = buildUserCredentialsFromDb(user.credentials);
+    if (userCreds.length > 0) {
+      if (maxZ > STEPUP_Z_MAX || assessment.score > 60) {
+        await prisma.loginHistory.create({
+          data: {
+            userId: user.id,
+            eventType: "alert",
+            deviceInfo: body.deviceInfo,
+            ipAddress: ip,
+            location: null,
+            riskScore: assessment.score,
+            riskAction: "pccp_anomaly",
+            details: JSON.stringify({ maxZ, riskScore: assessment.score, signals: assessment.signals }),
+          },
+        });
+      }
+      const stepupToken = await createStepupState({
+        userId: user.id,
+        email: state.email,
+        deviceClass: body.deviceClass,
+        timingSamples: samples,
+      });
+      const options = await buildAuthenticationOptions({
+        id: user.id,
+        email: state.email,
+        credentials: userCreds,
+      });
+      await deleteLoginState(body.token);
+      return res.json({ status: "stepup_required", stepupToken, options });
+    }
+    // If no passkey on file, log the anomaly and continue with login
+    logger.warn(
+      `PCCP suspicious behavior (z=${maxZ.toFixed(2)}, risk=${assessment.score}) on ${user.email} (no passkey for step-up); continuing`,
+    );
   }
 
   const { accessToken, refreshToken, user: outUser } = await completeLogin(

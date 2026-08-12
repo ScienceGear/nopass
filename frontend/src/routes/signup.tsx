@@ -9,6 +9,7 @@ import {
   Loader2,
   Mail,
   MailCheck,
+  MousePointerClick,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -71,6 +72,11 @@ const signupTips: AuthTip[] = [
     icon: <ClipboardCheck className="size-4" />,
     title: "Recovery you control",
     body: "10 offline codes are the only backup you'll ever need.",
+  },
+  {
+    icon: <MousePointerClick className="size-4" />,
+    title: "Optional click-points",
+    body: "After signup, set memorable image spots in Security settings for passwordless backup sign-in.",
   },
 ];
 
@@ -522,6 +528,9 @@ function Signup() {
                 <Button size="lg" className="w-full" onClick={() => navigate({ to: "/dashboard" })}>
                   I&apos;ve saved these  go to my account <ArrowRight className="size-4" />
                 </Button>
+                <Button size="lg" variant="outline" className="w-full" asChild>
+                  <Link to="/settings/security">Set up click-point login (optional)</Link>
+                </Button>
               </div>
             )}
           </div>
@@ -530,6 +539,13 @@ function Signup() {
             Already with us?{" "}
             <Link to="/login" className="font-bold text-ink underline-offset-4 hover:underline sm:font-semibold">
               Sign in with a passkey
+            </Link>
+            {" · "}
+            <Link
+              to="/login/pccp"
+              className="font-bold text-ink underline-offset-4 hover:underline sm:font-semibold"
+            >
+              click-points
             </Link>
           </p>
         </Reveal>

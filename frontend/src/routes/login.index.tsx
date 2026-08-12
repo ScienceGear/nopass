@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Fingerprint,
   MailCheck,
+  MousePointerClick,
   QrCode,
   ShieldAlert,
   ShieldCheck,
@@ -69,6 +70,11 @@ const loginTips: AuthTip[] = [
     icon: <ShieldCheck className="size-4" />,
     title: "Risk-scored in real time",
     body: "Unusual sign-ins get an extra check  or a friendly block.",
+  },
+  {
+    icon: <MousePointerClick className="size-4" />,
+    title: "Click-point backup",
+    body: "Memorise spots on images and sign in without a passkey when you need to.",
   },
 ];
 
@@ -362,6 +368,23 @@ function LoginPage() {
                   Continue <ArrowRight className="size-4" />
                 </Button>
 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={() => {
+                    const search: { email?: string; redirect?: string } = {};
+                    if (email) search.email = email;
+                    if (redirect) search.redirect = redirect;
+                    navigate({ to: "/login/pccp", search });
+                  }}
+                >
+                  <MousePointerClick className="size-4" />
+                  Sign in with click-points
+                </Button>
+
                 <button
                   type="button"
                   onClick={() => setShowOthers((v) => !v)}
@@ -387,7 +410,11 @@ function LoginPage() {
                     <OtherMethod
                       label="Sign in with click-points"
                       hint="Click memorable spots on images — no passkey needed."
-                      onClick={() => navigate({ to: "/login/pccp" })}
+                      onClick={() => {
+                        const search: { email?: string; redirect?: string } = { email };
+                        if (redirect) search.redirect = redirect;
+                        navigate({ to: "/login/pccp", search });
+                      }}
                     />
                     <OtherMethod
                       label="Sign in on another device"

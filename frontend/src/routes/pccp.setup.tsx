@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { MousePointerClick } from "lucide-react";
 import { Button } from "@/components/nova/primitives";
@@ -43,6 +44,7 @@ function detectDeviceClass(): PccpDeviceClass {
 type Stage = "intro" | "capturing" | "done";
 
 function PccpSetupPage() {
+  const qc = useQueryClient();
   const [stage, setStage] = React.useState<Stage>("intro");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -89,6 +91,7 @@ function PccpSetupPage() {
         deviceClass: detectDeviceClass(),
       });
       if (res.complete) {
+        await qc.invalidateQueries({ queryKey: ["pccp-status"] });
         setStage("done");
         return;
       }

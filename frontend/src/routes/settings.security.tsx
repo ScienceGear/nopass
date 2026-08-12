@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
-import { Check, Download, KeyRound, Loader2, Plus, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, Download, KeyRound, Loader2, MousePointerClick, Plus, ShieldCheck, Smartphone } from "lucide-react";
 import { Button, EmptyState, MetaLine, Panel, PillBadge } from "@/components/nova/primitives";
 import { PhoneInput } from "@/components/nova/PhoneInput";
 import { ListSkeleton } from "@/components/nova/skeletons";
@@ -13,9 +13,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   deletePasskey,
+  deletePccpEnrollment,
   getNotificationPrefs,
   getDevices,
   getPasskeys,
+  getPccpStatus,
   getProfile,
   getRecoveryCodes,
   postPasskey,
@@ -50,6 +52,7 @@ function SecuritySettings() {
   const prefs = useQuery({ queryKey: ["prefs"], queryFn: getNotificationPrefs });
   const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile });
   const devices = useQuery({ queryKey: ["devices"], queryFn: getDevices });
+  const pccp = useQuery({ queryKey: ["pccp-status"], queryFn: getPccpStatus });
   const [list, setList] = React.useState<Awaited<ReturnType<typeof getPasskeys>>>([]);
   const [showCodes, setShowCodes] = React.useState(false);
   const [codeList, setCodeList] = React.useState<string[]>([]);
@@ -62,6 +65,7 @@ function SecuritySettings() {
   const [phoneBusy, setPhoneBusy] = React.useState(false);
   const [phoneMsg, setPhoneMsg] = React.useState<string | null>(null);
   const [savingPrefs, setSavingPrefs] = React.useState(false);
+  const [disablingPccp, setDisablingPccp] = React.useState(false);
 
   const phoneChanged = Boolean(phone && profile.data && phone !== profile.data.phone);
 
@@ -310,6 +314,80 @@ function SecuritySettings() {
                       </div>
                     ))
                   )}
+                </div>
+              </Panel>
+            </Reveal>
+
+            {/* Click-point login (PCCP) */}
+            <Reveal delay={40}>
+              <Panel>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg">Click-point login</h2>
+                  {pccp.data?.enrolled ? (
+                    <PillBadge tone="soft" icon={<MousePointerClick className="size-3.5" />}>
+                      Active
+                    </PillBadge>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Sign in by clicking memorable spots on your images — a passwordless backup when
+                  passkeys aren&apos;t available. Suspicious timing triggers an extra passkey check.
+                </p>
+                <div className="mt-4 hairline-y">
+                  {pccp.isPending ? (
+                    <ListSkeleton rows={2} />
+                  ) : (
+                    <>
+                      <MetaLine
+                        label="Status"
+                        value={pccp.data?.enrolled ? "Enrolled" : "Not set up"}
+                      />
+                      {pccp.data?.locked ? (
+                        <MetaLine
+                          label="Method lockout"
+                          value={
+                            pccp.data.lockedUntil
+                              ? `Until ${fmt(pccp.data.lockedUntil)}`
+                              : "Temporarily locked"
+                          }
+                        />
+                      ) : null}
+                    </>
+                  )}
+                </div>
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                  <Button size="sm" className="flex-1" asChild>
+                    <Link to="/pccp/setup">
+                      {pccp.data?.enrolled ? "Re-enroll click-points" : "Set up click-points"}
+                    </Link>
+                  </Button>
+                  {pccp.data?.enrolled ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-destructive hover:text-destructive"
+                      disabled={disablingPccp}
+                      onClick={async () => {
+                        setDisablingPccp(true);
+                        try {
+                          await deletePccpEnrollment();
+                          await qc.invalidateQueries({ queryKey: ["pccp-status"] });
+                          toast.success("Click-point login disabled");
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Could not disable click-point login.",
+                          );
+                        } finally {
+                          setDisablingPccp(false);
+                        }
+                      }}
+                    >
+                      {disablingPccp ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Disable
+                    </Button>
+                  ) : null}
                 </div>
               </Panel>
             </Reveal>

@@ -22,5 +22,7 @@ router.get("/notification-prefs", security.getNotificationPrefs);
 router.put("/notification-prefs", security.updateNotificationPrefs);
 router.post("/sessions/:id/revoke", security.revokeSession);
 router.post("/sessions/revoke-all", security.revokeAllSessions);
+router.get("/pccp", security.pccpStatus);
+router.delete("/pccp", security.pccpDisable);
 
 export default router;
