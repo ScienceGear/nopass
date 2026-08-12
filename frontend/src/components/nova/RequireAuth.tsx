@@ -29,9 +29,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       });
       return;
     }
-    // A session that exists but hasn't finished onboarding belongs on the
-    // onboarding flow, not on private banking pages.
-    if (session.onboardingIncomplete) {
+    if (session.onboardingIncomplete && !returnUrl.includes("/onboarding") && !returnUrl.includes("/pccp/setup")) {
       setRedirected(true);
       void router.navigate({ to: "/onboarding" });
     }
