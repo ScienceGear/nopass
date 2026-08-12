@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowUpRight, Github, Menu, X } from "lucide-react";
+import { ArrowUpRight, Github, LogOut, Menu, X } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { support } from "@/lib/config";
@@ -54,7 +54,7 @@ export function NovaBackground({ children }: { children: React.ReactNode }) {
  * rounded inner panel so the auth card reads as a framed "page in page". */
 export function AuthBackground({ children }: { children: React.ReactNode }) {
   return (
-    <div className="nova-field nova-grain h-dvh w-full overflow-hidden p-3 sm:p-6 lg:p-8">{children}</div>
+    <div className="nova-field nova-grain min-h-dvh w-full p-3 sm:p-6 lg:p-8">{children}</div>
   );
 }
 
@@ -214,7 +214,7 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" asChild>
+              <Button variant="outline" size="sm" asChild>
                 <Link to="/login">Log in</Link>
               </Button>
               <Button size="sm" asChild>
@@ -224,15 +224,30 @@ export function Navbar({ variant = "marketing" }: { variant?: "marketing" | "app
           )}
         </div>
 
-        <button
-          type="button"
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-ink lg:hidden"
-        >
-          {open ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        <div className="flex shrink-0 items-center gap-2 lg:hidden">
+          {session ? (
+            <button
+              type="button"
+              aria-label="Log out"
+              onClick={() => {
+                clearSession();
+                window.location.assign("/");
+              }}
+              className="grid size-11 place-items-center rounded-full bg-muted text-ink"
+            >
+              <LogOut className="size-5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="grid size-11 place-items-center rounded-full bg-muted text-ink"
+          >
+            {open ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
       </header>
 
       {/* Mobile drawer */}
@@ -312,8 +327,8 @@ const footerCols = [
     title: "Security",
     links: [
       { to: "/security", label: "How it works" },
-      { to: "/activity", label: "Login history" },
-      { to: "/settings/security", label: "Your passkeys" },
+      { to: "/activity", label: "Login history", auth: true },
+      { to: "/settings/security", label: "Your passkeys", auth: true },
     ],
   },
   {
@@ -328,12 +343,13 @@ const footerCols = [
     links: [
       { to: "/privacy", label: "Privacy" },
       { to: "/terms", label: "Terms" },
-      { to: "/security", label: "Security" },
     ],
   },
 ] as const;
 
 export function Footer() {
+  const { session } = useSession();
+
   return (
     <footer className="mt-20 border-t border-[oklch(0.207_0.014_251_/_0.07)] pt-12">
       <div className="mb-10 flex flex-col items-center justify-between gap-4 rounded-3xl bg-lime-soft p-6 sm:flex-row">
@@ -357,16 +373,19 @@ export function Footer() {
           <div key={col.title} className="min-w-0">
             <p className="eyebrow">{col.title}</p>
             <ul className="mt-4 space-y-2.5">
-              {col.links.map((l) => (
-                <li key={col.title + l.label}>
-                  <Link
-                    to={l.to}
-                    className="text-sm text-muted-foreground transition-colors duration-200 hover:text-ink"
-                  >
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
+              {col.links.map((l) => {
+                if ("auth" in l && l.auth && !session) return null;
+                return (
+                  <li key={col.title + l.label}>
+                    <Link
+                      to={l.to}
+                      className="text-sm text-muted-foreground transition-colors duration-200 hover:text-ink"
+                    >
+                      {l.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}

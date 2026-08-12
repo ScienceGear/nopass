@@ -37,7 +37,7 @@ export function AuthSplit({
   return (
     <div
       className={cn(
-        "relative grid h-full w-full overflow-hidden bg-card lg:grid-cols-[1fr_1.12fr] lg:rounded-[2.25rem] lg:shadow-panel",
+        "relative grid w-full bg-card lg:grid-cols-[1fr_1.12fr] lg:rounded-[2.25rem] lg:shadow-panel",
         className,
       )}
     >
@@ -94,7 +94,7 @@ export function AuthSplit({
       </aside>
 
       {/* ── Right: form panel ─────────────────────────────────────────── */}
-      <section className="relative flex min-h-0 flex-col bg-card">
+      <section className="relative flex flex-col bg-card">
         {/* Mobile-only brand strip */}
         <div className="space-y-2 border-b border-hairline bg-lime-soft/60 px-5 pb-4 pt-5 lg:hidden">
           <PillBadge tone="ink" icon={<Sparkles className="size-3.5" />}>
@@ -116,7 +116,7 @@ export function AuthSplit({
           <div className="ml-auto flex items-center">{badge}</div>
         </header>
 
-        <main className="flex min-h-0 w-full flex-1 items-center justify-center overflow-y-auto px-5 pb-8 pt-2 sm:px-10 lg:px-12">
+        <main className="flex w-full flex-1 items-center justify-center px-5 pb-8 pt-2 sm:px-10 lg:px-12">
           {children}
         </main>
       </section>

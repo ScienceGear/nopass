@@ -15,7 +15,7 @@ const novaButton = cva(
         secondary: "bg-lime-soft text-ink hover:-translate-y-0.5 hover:bg-[oklch(0.93_0.05_260)]",
         outline:
           "border border-[oklch(0.207_0.014_251_/_0.14)] bg-card text-ink hover:-translate-y-0.5 hover:border-[oklch(0.207_0.014_251_/_0.28)]",
-        ghost: "text-ink/80 hover:text-ink hover:bg-muted",
+        ghost: "text-ink font-medium hover:bg-muted hover:text-ink",
         danger: "bg-destructive/10 text-destructive hover:bg-destructive/16",
         link: "text-ink underline-offset-4 hover:underline px-0",
       },

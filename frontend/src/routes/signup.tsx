@@ -20,7 +20,7 @@ import { Button, PillBadge } from "@/components/nova/primitives";
 import { PasskeyGlyph, type PasskeyPhase } from "@/components/nova/PasskeyPrompt";
 import { PhoneInput } from "@/components/nova/PhoneInput";
 import { AuthSplit, type AuthTip } from "@/components/nova/AuthSplit";
-import { NovaBackground, Reveal } from "@/components/nova/shell";
+import { AuthBackground, Reveal } from "@/components/nova/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -199,11 +199,8 @@ function Signup() {
       await postRegisterInitiate({ name, email, phone });
       setStep(2);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorCode(err.code || null);
-      } else {
-        setErrorCode(null);
-      }
+      const apiErr = err as { code?: string };
+      setErrorCode(apiErr?.code || null);
       setError(err instanceof Error ? err.message : "Could not start signup.");
     } finally {
       setResending(false);
@@ -253,7 +250,7 @@ function Signup() {
   const progressTotal = step === 4 ? 4 : 3;
 
   return (
-    <NovaBackground>
+    <AuthBackground>
       <AuthSplit
         eyebrow="No password required"
         headline="Two fields. One scan. You're in."
@@ -567,6 +564,6 @@ function Signup() {
           </p>
         </Reveal>
       </AuthSplit>
-    </NovaBackground>
+    </AuthBackground>
   );
 }
