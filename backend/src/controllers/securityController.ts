@@ -332,6 +332,18 @@ export const revokeDevice: RequestHandler = asyncHandler(async (req, res) => {
     where: { id },
     data: { isRevoked: true },
   });
+
+  // Also revoke all active sessions matching this device for instant logout
+  await prisma.session.updateMany({
+    where: {
+      userId: req.userId,
+      deviceInfo: device.deviceInfo,
+      ipAddress: device.ipAddress,
+      revoked: false,
+    },
+    data: { revoked: true },
+  });
+
   res.json({ ok: true });
 });
 

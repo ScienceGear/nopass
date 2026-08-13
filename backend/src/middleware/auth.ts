@@ -33,6 +33,15 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, _res, next) 
   req.userId = user.id;
   req.authEmail = user.email;
   req.sessionId = payload.sessionId;
+
+  // Instant remote logout: reject requests from revoked sessions
+  if (payload.sessionId) {
+    const session = await prisma.session.findUnique({ where: { id: payload.sessionId } });
+    if (!session || session.revoked) {
+      throw new AppError(401, "Session has been revoked.");
+    }
+  }
+
   next();
 });
 
